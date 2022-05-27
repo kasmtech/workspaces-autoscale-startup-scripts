@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-# Note: Templated items (e.g '{foo}') will be replaced by Kasm when provisioning the system
+# Note: Templated items (e.g '<bracket>foo<bracket>') will be replaced by Kasm when provisioning the system
 GIVEN_HOSTNAME='{server_hostname}'
 MANAGER_TOKEN='{manager_token}'
 # Ensure the Upstream Auth Address in the Zone is set to an actual DNS name or IP and NOT $request_host$
@@ -9,10 +9,10 @@ MANAGER_ADDRESS='{upstream_auth_address}'
 SERVER_ID='{server_id}'
 PROVIDER_NAME='{provider_name}'
 SWAP_SIZE_MB='2048'
-KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.10.0.238225.tar.gz'
+KASM_BUILD_URL='https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_backend/branches/develop/kasm_workspaces_develop.tar.gz'
 
 
-apt_wait () {
+apt_wait () {{
   while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
@@ -24,7 +24,7 @@ apt_wait () {
       sleep 1
     done
   fi
-}
+}}
 
 
 # Create a swap file
