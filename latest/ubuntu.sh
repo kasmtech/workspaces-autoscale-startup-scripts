@@ -55,6 +55,12 @@ IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
 # OCI Internal IP
 #IP=(`hostname -I | cut -d  ' ' -f1 |  tr -d '\\n'`)
 
+# Azure Private IP
+#IP=(`curl -H Metadata:true "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/privateIpAddress?api-version=2017-04-02&format=text"`)
+
+# Azure Public IP
+#IP=(`curl -H Metadata:true "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2017-04-02&format=text"`)
+
 
 # If the AutoScaling is configured to create DNS records for the new agents, this value will be populated, and used
 #   in the agent's config
