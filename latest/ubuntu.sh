@@ -64,7 +64,7 @@ IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
 
 # If the AutoScaling is configured to create DNS records for the new agents, this value will be populated, and used
 #   in the agent's config
-if [ -z "$GIVEN_HOSTNAME" ]
+if [ -z "$GIVEN_HOSTNAME" ] ||  [ "$GIVEN_HOSTNAME" == "None" ]  ;
 then
     AGENT_ADDRESS=$IP
 else
@@ -76,11 +76,16 @@ wget $KASM_BUILD_URL -O kasm.tar.gz
 tar -xf kasm.tar.gz
 
 apt_wait
+sleep 10
+apt_wait
+
 bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m $MANAGER_ADDRESS -i $SERVER_ID -r $PROVIDER_NAME -M $MANAGER_TOKEN
 
 
 echo -e "{nginx_cert_in}" > /opt/kasm/current/certs/kasm_nginx.crt
 echo -e "{nginx_key_in}" > /opt/kasm/current/certs/kasm_nginx.key
+
+docker exec -it kasm_proxy nginx -s reload
 
 # Cleanup the downloaded and extracted files
 rm kasm.tar.gz
