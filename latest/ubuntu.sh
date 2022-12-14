@@ -3,6 +3,7 @@ set -ex
 
 # Note: Templated items (e.g '<bracket>foo<bracket>') will be replaced by Kasm when provisioning the system
 GIVEN_HOSTNAME='{server_hostname}'
+GIVEN_FQDN='{server_external_fqdn}'
 MANAGER_TOKEN='{manager_token}'
 # Ensure the Upstream Auth Address in the Zone is set to an actual DNS name or IP and NOT $request_host$
 MANAGER_ADDRESS='{upstream_auth_address}'
@@ -64,11 +65,11 @@ IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
 
 # If the AutoScaling is configured to create DNS records for the new agents, this value will be populated, and used
 #   in the agent's config
-if [ -z "$GIVEN_HOSTNAME" ] ||  [ "$GIVEN_HOSTNAME" == "None" ]  ;
+if [ -z "$GIVEN_FQDN" ] ||  [ "$GIVEN_FQDN" == "None" ]  ;
 then
     AGENT_ADDRESS=$IP
 else
-    AGENT_ADDRESS=$GIVEN_HOSTNAME
+    AGENT_ADDRESS=$GIVEN_FQDN
 fi
 
 cd /tmp
