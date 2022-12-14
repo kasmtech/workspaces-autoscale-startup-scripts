@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-# Note: Templated items (e.g '{foo}') will be replaced by Kasm when provisioning the system
+# Note: Templated items (e.g '<bracket>foo<bracket>') will be replaced by Kasm when provisioning the system
 GIVEN_HOSTNAME='{server_hostname}'
 MANAGER_TOKEN='{manager_token}'
 # Ensure the Upstream Auth Address in the Zone is set to an actual DNS name or IP and NOT $request_host$
@@ -14,7 +14,7 @@ KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.10.0
 
 
 
-apt_wait () {
+apt_wait () {{
   while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
@@ -26,7 +26,7 @@ apt_wait () {
       sleep 1
     done
   fi
-}
+}}
 
 
 # Create a swap file
@@ -75,11 +75,15 @@ wget $KASM_BUILD_URL -O kasm.tar.gz
 tar -xf kasm.tar.gz
 
 apt_wait
+sleep 20
+apt_wait
 bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m $MANAGER_ADDRESS -i $SERVER_ID -r $PROVIDER_NAME -M $MANAGER_TOKEN
 
 
 echo -e "{nginx_cert_in}" > /opt/kasm/current/certs/kasm_nginx.crt
 echo -e "{nginx_key_in}" > /opt/kasm/current/certs/kasm_nginx.key
+
+docker exec -it kasm_proxy nginx -s reload
 
 # Cleanup the downloaded and extracted files
 rm kasm.tar.gz
