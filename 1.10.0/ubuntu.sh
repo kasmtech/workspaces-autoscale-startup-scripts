@@ -8,7 +8,8 @@ MANAGER_TOKEN='{manager_token}'
 MANAGER_ADDRESS='{upstream_auth_address}'
 SERVER_ID='{server_id}'
 # Provider Options are aws, oci, gcp, or digital_ocean
-PROVIDER_NAME='oci'
+PROVIDER_NAME='aws'
+# Swap size in MB, adjust appropriately depending on the size of your Agent VMs
 SWAP_SIZE_MB='2048'
 KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.10.0.238225.tar.gz'
 

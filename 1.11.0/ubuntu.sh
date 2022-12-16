@@ -8,8 +8,9 @@ MANAGER_TOKEN='{manager_token}'
 MANAGER_ADDRESS='{upstream_auth_address}'
 SERVER_ID='{server_id}'
 PROVIDER_NAME='{provider_name}'
+# Swap size in MB, adjust appropriately depending on the size of your Agent VMs
 SWAP_SIZE_MB='2048'
-KASM_BUILD_URL='https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_backend/branches/develop/kasm_workspaces_develop.tar.gz'
+KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.11.0.18142e.tar.gz'
 
 
 apt_wait () {{
