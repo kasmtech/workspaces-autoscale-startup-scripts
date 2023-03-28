@@ -21,4 +21,4 @@ echo "${{VARIABLE}}"
 ```
 
 ## Example
-The example script [ubuntu.sh](./ubuntu.sh) installs KasmVNC on the Ubuntu VM and configures a KasmVNC user using the configured username and password in the [auto-scale configuration's](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) Connection User and Connection Password fields. Kasm Workspaces can also work with a traditional VNC server. The example ubuntu.sh script also includes a function for installing, configuring, and starting tigervnc on the default port 5901.
+The example script [ubuntu.sh](./ubuntu.sh) installs KasmVNC on the Ubuntu VM and configures a KasmVNC user using the configured username and password in the [auto-scale configuration's](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) Connection User and Connection Password fields.
