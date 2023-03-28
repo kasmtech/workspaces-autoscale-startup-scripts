@@ -42,20 +42,9 @@ install_kasmvnc (){{
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
 }}
 
-install_tigervnc (){{
-  apt-get install -y tigervnc-standalone-server
-  mkdir /home/ubuntu/.vnc
-  echo "password123abc" | vncpasswd -f > /home/ubuntu/.vnc/passwd
-  echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/ubuntu/.vnc/xstartup
-  chown -R ubuntu:ubuntu /home/ubuntu/.vnc
-  chmod 0600 /home/ubuntu/.vnc/passwd
-  su -l -c 'vncserver -localhost no' ubuntu
-}}
-
 apt_wait
 sleep 10
 apt_wait
 apt-get update
 install_xfce
 install_kasmvnc
-#install_tigervnc
