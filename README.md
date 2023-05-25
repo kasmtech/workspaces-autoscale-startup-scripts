@@ -1,5 +1,4 @@
 # Kasm AutoScale Startup Scripts
-
 These scripts are example startup scripts that may be used for autoscaling [Servers](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-config-server-pool) and [Docker Agents](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-config-docker-agent-pool) in a Kasm Workspaces deployment.
 
 ## Servers
@@ -12,7 +11,14 @@ Kasm Workspaces can auto-scale [Docker Agents](https://www.kasmweb.com/docs/late
 Use the folder below that matches the version of Kasm Workspaces you have deployed.
 
 ## Latest
-The latest folder is designed to work with all releases above the latest versioned releases listed below. At the time of this writing that would mean 1.12.0 and beyond. Kasm Workspaces 1.12.0 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
+The latest folder is designed to work with all releases above the latest versioned releases listed below. At the time of this writing that would mean developer preview and beyond. Kasm Workspaces developer preview and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
+
+- [Docker Agents](./latest/docker_agents/README.md)
+- [Windows VMs](./latest/windows_vms/README.md)
+- [Linux VMs](./latest/linux_vms/README.md)
+
+## 1.13.0
+Kasm Workspaces 1.13.0 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
 
 - [Docker Agents](./latest/docker_agents/README.md)
 - [Windows VMs](./latest/windows_vms/README.md)
