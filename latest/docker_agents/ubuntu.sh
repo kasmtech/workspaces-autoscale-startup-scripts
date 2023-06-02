@@ -10,7 +10,7 @@ MANAGER_ADDRESS='{upstream_auth_address}'
 SERVER_ID='{server_id}'
 PROVIDER_NAME='{provider_name}'
 # Swap size in MB, adjust appropriately depending on the size of your Agent VMs
-SWAP_SIZE_MB='2048'
+SWAP_SIZE_GB='8'
 KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.13.0.002947.tar.gz'
 
 
@@ -33,11 +33,11 @@ apt_wait () {{
 if [[ $(sudo swapon --show) ]]; then
   echo 'Swap Exists'
 else
-  /usr/bin/dd if=/dev/zero of=/var/swap.1 bs=1M count=$SWAP_SIZE_MB
+  fallocate -l ${SWAP_SIZE_GB}G /var/swap.1
   /sbin/mkswap /var/swap.1
   chmod 600 /var/swap.1
   /sbin/swapon /var/swap.1
-  echo '/mnt/1GiB.swap swap swap defaults 0 0' | tee -a /etc/fstab
+  echo '/var/swap.1 swap swap defaults 0 0' | tee -a /etc/fstab
 fi
 
 #AWS Internal IP
