@@ -11,7 +11,7 @@ SERVER_ID='{server_id}'
 PROVIDER_NAME='{provider_name}'
 # Swap size in MB, adjust appropriately depending on the size of your Agent VMs
 SWAP_SIZE_MB='2048'
-KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.12.0.d4fd8a.tar.gz'
+KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.13.1.421524.tar.gz'
 
 
 apt_wait () {{

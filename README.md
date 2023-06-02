@@ -20,16 +20,23 @@ The latest folder is designed to work with all releases above the latest version
 ## 1.13.0
 Kasm Workspaces 1.13.0 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
 
-- [Docker Agents](./latest/docker_agents/README.md)
-- [Windows VMs](./latest/windows_vms/README.md)
-- [Linux VMs](./latest/linux_vms/README.md)
+- [Docker Agents](./1.13.0/docker_agents/README.md)
+- [Windows VMs](./1.13.0/windows_vms/README.md)
+- [Linux VMs](./1.13.0/linux_vms/README.md)
+
+## 1.12.0
+Kasm Workspaces 1.12.0 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
+
+- [Docker Agents](./1.12.0/docker_agents/README.md)
+- [Windows VMs](./1.12.0/windows_vms/README.md)
+- [Linux VMs](./1.12.0/linux_vms/README.md)
 
 ## 1.11.0
-Kasm Workspaces 1.11.0 supports auto scaling of Kasm Agents, which support containerized desktops and applications for end-user sessions.
+Kasm Workspaces 1.11.0 supports scaling of Kasm Agents, which support containerized desktops and applications for end-user sessions.
 
 - [Kasm Agents](1.11.0/README.md)
 
 ## 1.10.0
-Kasm Workspaces 1.10.0 supports auto scaling of Kasm Agents, which support containerized desktops and applications for end-user sessions.
+Kasm Workspaces 1.10.0 supports scaling of Kasm Agents, which support containerized desktops and applications for end-user sessions.
 
 - [Kasm Agents](1.10.0/README.md)
