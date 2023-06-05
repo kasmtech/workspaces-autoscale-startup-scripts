@@ -1,5 +1,5 @@
 # Docker Agent Startup Script
-In Kasm Workspaces 1.12.0 the [VM Provider](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up. 
+In Kasm Workspaces 1.13.0 the [VM Provider](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up. 
 
 ## Edits Required
 The following subsections cover what edits to the script are required for each deployment and zone.
@@ -8,7 +8,9 @@ The following subsections cover what edits to the script are required for each d
 The default swap size defined in the script on line 13 is 2GB, adjust as needed. The larger the agent, the more swap space you may wish to configure.
 
 ### Agents IP/Hostname
-Lines 39 through 64 use different methods of getting either the VMs public or private IP address. Uncomment the method you wish to use. By default, it assumes AWS and that you want the private IP address. The managers in the zone must be able to communicate with the agent using this IP address. If you have the auto scale settings configured to create public DNS records, the public DNS name will be used as configured on line 68.
+Lines 39 through 72 use different methods of getting either the VMs public or private IP address. Uncomment the method you wish to use. By default, it assumes AWS and that you want the private IP address. The managers in the zone must be able to communicate with the agent using this IP address. If you have the auto scale settings configured to create public DNS records, the public DNS name will be used as configured on line 80.
+
+VMware vSphere autoscalling requires filling in the network adapter name on line 72 that the template will use in order to ensure capturing the proper IP.
 
 ## Variables
 

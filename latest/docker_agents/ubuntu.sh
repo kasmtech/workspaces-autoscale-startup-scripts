@@ -10,8 +10,8 @@ MANAGER_ADDRESS='{upstream_auth_address}'
 SERVER_ID='{server_id}'
 PROVIDER_NAME='{provider_name}'
 # Swap size in MB, adjust appropriately depending on the size of your Agent VMs
-SWAP_SIZE_MB='2048'
-KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.12.0.d4fd8a.tar.gz'
+SWAP_SIZE_GB='8'
+KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.13.0.002947.tar.gz'
 
 
 apt_wait () {{
@@ -30,11 +30,15 @@ apt_wait () {{
 
 
 # Create a swap file
-/usr/bin/dd if=/dev/zero of=/var/swap.1 bs=1M count=$SWAP_SIZE_MB
-/sbin/mkswap /var/swap.1
-chmod 600 /var/swap.1
-/sbin/swapon /var/swap.1
-echo '/mnt/1GiB.swap swap swap defaults 0 0' | tee -a /etc/fstab
+if [[ $(sudo swapon --show) ]]; then
+  echo 'Swap Exists'
+else
+  fallocate -l ${SWAP_SIZE_GB}G /var/swap.1
+  /sbin/mkswap /var/swap.1
+  chmod 600 /var/swap.1
+  /sbin/swapon /var/swap.1
+  echo '/var/swap.1 swap swap defaults 0 0' | tee -a /etc/fstab
+fi
 
 #AWS Internal IP
 IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
@@ -63,6 +67,9 @@ IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
 # Azure Public IP
 #IP=(`curl -H Metadata:true "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2017-04-02&format=text"`)
 
+#VSphere IP
+# Replace ens33 with the appropriate network adapter name.
+#IP=$(/sbin/ip -o -4 addr list ens33 | awk '{{print $4}}' | cut -d/ -f1)
 
 # If the AutoScaling is configured to create DNS records for the new agents, this value will be populated, and used
 #   in the agent's config
