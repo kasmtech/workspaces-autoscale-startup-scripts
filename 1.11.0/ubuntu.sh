@@ -29,7 +29,7 @@ apt_wait () {{
 
 
 # Create a swap file
-fallocate -l ${SWAP_SIZE_GB}G /var/swap.1
+fallocate -l ${{SWAP_SIZE_GB}}G /var/swap.1
 /sbin/mkswap /var/swap.1
 chmod 600 /var/swap.1
 /sbin/swapon /var/swap.1
