@@ -59,8 +59,11 @@ See our Windows Server video, which walks through auto AD joining and LDAP SSO.
 <iframe src='https://www.youtube.com/embed/_WCee4-E4vA' frameborder='0' allowfullscreen></iframe>
 
 
-#### AWS
+#### AWS 
 AWS needs to have the PowerShell script defined in XML. See our example [aws_local_accounts.txt](./aws_local_account.txt) which creates a local Windows account using the username and password that are configured in the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) connection settings. 
 
 #### OCI
 See our example [oci_local_accounts.txt](./oci_local_account.txt) which creates a local Windows account using the username and password that are configured in the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) connection settings. 
+
+### Windows Service
+The [Kasm Windows service](https://www.kasmweb.com/docs/latest/guide/windows/windows_service.html) provides many features and is highly recommended to install. One of the feature is provides is automatic Kasm managed local Windows accounts. With the Windows service installed, the above two script examples that create a local Windows account are unnecessary. Instead, the Kasm service will automatically create local Windows accounts, unique to each Kasm user, one a new session is created. A randomized password is used for each session. The username in Windows of a user contains portions of the Kasm username and user ID. See the [aws_install_windows_service.txt](./aws_install_windows_service.txt) and [oci_install_widows_service.txxt](./oci_install_windows_service.txt) for an examples of how to install the agent automatically and have it register with your deployment on boot of the VM. 
