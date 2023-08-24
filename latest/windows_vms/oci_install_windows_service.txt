@@ -21,7 +21,7 @@ for ($i = 1; $i -le 20; $i++) {{
         cd "C:\Program Files\Kasm"
         .\agent.exe --register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {registration_token}
     
-        if ($?) {{
+        if ($LastExitCode -eq 0) {{
             net start kasm
             Start-Service -Name "Audiosrv"
             Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Successfully installed and registered agent"
