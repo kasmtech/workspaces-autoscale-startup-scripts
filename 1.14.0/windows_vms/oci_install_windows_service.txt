@@ -1,0 +1,40 @@
+#ps1_sysnative
+
+New-EventLog -LogName Application -Source kasm_startup_script
+Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Downloading Windows Service"
+
+# Download and install the Kasm Service
+Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_1.1.2b3f26b.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
+
+Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Windows Service"
+C:\Users\Public\Downloads\kasm_service_installer.exe /S
+
+for ($i = 1; $i -le 20; $i++) {{
+    Start-Sleep -s 3
+    $service = Get-Service -Name W32Time -ErrorAction SilentlyContinue
+
+    if ($service.Length -gt 0 -And (Test-Path -Path "C:\Users\Public\Downloads\kasm_service_installer.exe" -PathType Leaf)) {{
+        # Register the Kasm Service with the deployment
+        Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Registering the Windows Service with the Kasm deployment at {upstream_auth_address}"
+
+        net stop kasm
+        cd "C:\Program Files\Kasm"
+        .\agent.exe --register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {registration_token}
+    
+        if ($LastExitCode -eq 0) {{
+            net start kasm
+            Start-Service -Name "Audiosrv"
+            Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Successfully installed and registered agent"
+            Exit 0
+        }} else {{
+            Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Error -Message "Registration of Agent failed: Check log output of kasm_service in EventViewer"
+            
+            Exit 1
+        }}
+    }} else {{
+        Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Service not found, trying again..."
+    }}
+}}
+
+Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Error -Message "Timed out waiting for Kasm Windows Service to be registered."
+Exit 1
