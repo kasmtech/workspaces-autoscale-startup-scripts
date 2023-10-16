@@ -10,18 +10,6 @@ Function Install-Winfsp {{
   Remove-Item $Env:temp\$winfsp_msi -Force
 }}
 
-Function Install-Rclone {{
-  Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Rclone"
-  Invoke-WebRequest -Uri $rclone_url -OutFile $Env:temp\$rclone_zip
-  Expand-Archive -Path $Env:temp\$rclone_zip -Destination $Env:temp\ -Force
-  $temp_folders = Get-ChildItem -Path $Env:temp -Directory
-  $rclone_temp_folder = $temp_folders | Where-Object {{$_.Name.StartsWith("rclone-")}}
-  $rclone_path = $Env:temp + "\" + $rclone_temp_folder
-  Move-Item -Path ($rclone_path + "\rclone.exe") -Destination $rclone_bin
-  Remove-Item -Path $rclone_path -Recurse -Force
-  Remove-Item $Env:temp\$rclone_zip -Force
-}}
-
 $user_home = "$profile_dir\$username"
 $ProgressPreference = 'SilentlyContinue'
 $winfsp_url = "https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi"
@@ -39,7 +27,6 @@ C:\Users\Public\Downloads\kasm_service_installer.exe /S
 
 # Optionally download and install rclone and Winfsp, required for Cloud Storage Mapping to work
 Install-Winfsp
-Install-Rclone
 
 for ($i = 1; $i -le 20; $i++) {{
     Start-Sleep -s 3
