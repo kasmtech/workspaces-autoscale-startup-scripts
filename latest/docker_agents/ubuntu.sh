@@ -40,8 +40,12 @@ else
   echo '/var/swap.1 swap swap defaults 0 0' | tee -a /etc/fstab
 fi
 
+
+# Default Route IP
+IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+
 #AWS Internal IP
-IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
+#IP=(`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`)
 
 #AWS Public IP
 #IP=(`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`)
@@ -87,6 +91,11 @@ tar -xf kasm.tar.gz
 apt_wait
 sleep 10
 apt_wait
+
+# Install Quemu Agent - Required for Kubevirt environment, optional for others
+apt-get update
+apt install -y qemu-guest-agent
+systemctl enable --now qemu-guest-agent.service
 
 bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m $MANAGER_ADDRESS -i $SERVER_ID -r $PROVIDER_NAME -M $MANAGER_TOKEN
 
