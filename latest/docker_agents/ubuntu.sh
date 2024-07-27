@@ -103,7 +103,7 @@ bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m $MANAGER_ADDRESS -
 echo -e "{nginx_cert_in}" > /opt/kasm/current/certs/kasm_nginx.crt
 echo -e "{nginx_key_in}" > /opt/kasm/current/certs/kasm_nginx.key
 
-docker exec -it kasm_proxy nginx -s reload
+docker exec kasm_proxy nginx -s reload
 
 # Cleanup the downloaded and extracted files
 rm kasm.tar.gz
