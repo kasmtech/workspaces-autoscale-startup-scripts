@@ -1,0 +1,55 @@
+#cloud-config
+package_update: true
+packages:
+  - qemu-guest-agent
+  - sudo
+users:
+  - name: kasm-admin
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - {ssh_key}
+
+write_files:
+  - path: /usr/local/bin/apt-wait.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      echo "Waiting for apt lock to be free..."
+      while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+          sleep 1
+        done
+        while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
+          sleep 1
+        done
+        if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
+          while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
+            sleep 1
+          done
+        fi
+runcmd:
+  - - systemctl
+    - enable
+    - --now
+    - qemu-guest-agent.service
+  - IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+  - cd /tmp
+  - wget https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_backend/branches/develop/kasm_workspaces_develop.tar.gz -O kasm.tar.gz
+  - tar -xf kasm.tar.gz
+  - |
+    if [ -z "$GIVEN_FQDN" ] ||  [ "$GIVEN_FQDN" == "None" ]  ;
+    then
+        AGENT_ADDRESS=$IP
+    else
+        AGENT_ADDRESS=$GIVEN_FQDN
+    fi
+  - /usr/local/bin/apt-wait.sh
+  - sleep 10
+  - /usr/local/bin/apt-wait.sh
+  - bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m {upstream_auth_address} -i {server_id} -r {provider_name} -M {manager_token}
+  - rm kasm.tar.gz
+  - rm -rf kasm_release
+swap:
+   filename: /var/swap.1
+   size: 8589934592
