@@ -15,8 +15,8 @@ $user_home = "$profile_dir\$username"
 $ProgressPreference = 'SilentlyContinue'
 $winfsp_url = "https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi"
 $winfsp_msi = "winfsp-2.0.23075.msi"
-$rclone_url = "https://github.com/rclone/rclone/releases/download/v1.64.0/rclone-v1.64.0-windows-amd64.zip"
-$rclone_zip = "rclone-v1.64.0-windows-amd64.zip"
+$rclone_url = "https://github.com/rclone/rclone/releases/download/v1.68.0/rclone-v1.68.0-windows-amd64.zip"
+$rclone_zip = "rclone-v1.68.0-windows-amd64.zip"
 $rclone_bin = "C:\Program Files\Kasm\bin\rclone.exe"
 
 # Download and install the Kasm Service

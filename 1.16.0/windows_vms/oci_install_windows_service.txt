@@ -1,4 +1,5 @@
-<powershell>
+#ps1_sysnative
+
 New-EventLog -LogName Application -Source kasm_startup_script
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Startup script has started."
 
@@ -20,12 +21,12 @@ $rclone_bin = "C:\Program Files\Kasm\bin\rclone.exe"
 
 # Download and install the Kasm Service
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Downloading Windows Service"
-Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_develop.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
+Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_1.3.08be1f527.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
 
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Windows Service"
 C:\Users\Public\Downloads\kasm_service_installer.exe /S
 
-# Optionally download and install rclone and Winfsp, required for Cloud Storage Mapping to work
+# Optionally download and install Winfsp, required for Cloud Storage Mapping to work
 Install-Winfsp
 
 for ($i = 1; $i -le 20; $i++) {{
@@ -57,4 +58,3 @@ for ($i = 1; $i -le 20; $i++) {{
 
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Error -Message "Timed out waiting for Kasm Windows Service to be registered."
 Exit 1
-</powershell>
