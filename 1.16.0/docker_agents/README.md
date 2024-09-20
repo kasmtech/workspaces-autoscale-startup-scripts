@@ -48,7 +48,7 @@ If you are using a direct to agent flow, where the iframe for the desktop connec
 If you are not using a direct to agent flow, that means all requests go through the front door and are proxied to the appropriate agent. This is the default workflow and it works well for most scenarios. In this workflow you don't necessarily need to specify the SSL cert and key, as the default install of the Kasm Agent will use self signed certs. Your organization, however, may require that services use a cert signed by your CA. If self-signed certs are acceptable, you can merely use a space in the auto scale settings for the public ssl cert and private key fields. Then modify the ubuntu.sh script by commenting out lines 84 and 85.
 
 ### KubeVirt
-If you are installing agents in KubeVirt uncomment lines 96-98 to add the qemu agent install.
+If you are installing agents in KubeVirt uncomment lines 96-98 to add the qemu agent install in [ubuntu.sh](./ubuntu.sh).
 
 ### cloud-config.yaml
 This is a default cloud init configuation that can be used as a startup script for Harvester/KubeVirt agents.

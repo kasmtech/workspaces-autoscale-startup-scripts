@@ -93,9 +93,9 @@ sleep 10
 apt_wait
 
 # Install Quemu Agent - Required for Kubevirt environment, optional for others
-apt-get update
-apt install -y qemu-guest-agent
-systemctl enable --now qemu-guest-agent.service
+#apt-get update
+#apt install -y qemu-guest-agent
+#systemctl enable --now qemu-guest-agent.service
 
 bash kasm_release/install.sh -e -S agent -p $AGENT_ADDRESS -m $MANAGER_ADDRESS -i $SERVER_ID -r $PROVIDER_NAME -M $MANAGER_TOKEN
 
