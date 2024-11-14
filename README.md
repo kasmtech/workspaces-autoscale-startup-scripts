@@ -17,6 +17,13 @@ The latest folder is designed to work with all releases above the latest version
 - [Windows VMs](./latest/windows_vms/README.md)
 - [Linux VMs](./latest/linux_vms/README.md)
 
+## 1.16.1
+Kasm Workspaces 1.16.1 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions.
+
+- [Docker Agents](./1.16.1/docker_agents/README.md)
+- [Windows VMs](./1.16.1/windows_vms/README.md)
+- [Linux VMs](./1.16.1/linux_vms/README.md)
+
 ## 1.16.0
 Kasm Workspaces 1.16.0 and greater support scaling general VMs which can be used as Kasm Docker Agents used to support containerized desktops and applications for end-user sessions and Windows and Linux VMs for traditional desktop sessions. 
 
