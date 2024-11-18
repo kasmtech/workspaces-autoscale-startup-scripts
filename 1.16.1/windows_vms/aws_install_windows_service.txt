@@ -20,7 +20,7 @@ $rclone_bin = "C:\Program Files\Kasm\bin\rclone.exe"
 
 # Download and install the Kasm Service
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Downloading Windows Service"
-Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_1.4_6006811d9.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
+Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_1.4_7f51b2de.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
 
 Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Windows Service"
 C:\Users\Public\Downloads\kasm_service_installer.exe /S
