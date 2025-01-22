@@ -82,7 +82,6 @@ $service = Get-Service -Name "kasm" -ErrorAction SilentlyContinue
 
 if (($service.Length -gt 0) -And (Test-Path -Path "$kasm_install_path\agent.exe" -PathType Leaf)) {{
 
-    Start-Sleep -s 5
     New-LogMessage -EntryType "Information" -Message "Creating task to register the Windows Service as {server_id} with the Kasm deployment at {upstream_auth_address}"
 
     # Kasm Manager won't provision the new server until the startup script completes, and we can't register the agent until the server is provisioned
