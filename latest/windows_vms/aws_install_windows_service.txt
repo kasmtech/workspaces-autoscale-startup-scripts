@@ -1,60 +1,186 @@
 <powershell>
-New-EventLog -LogName Application -Source kasm_startup_script
-Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Startup script has started."
-
-Function Install-Winfsp {{
-  Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Winsfp"
-  Invoke-WebRequest -Uri $winfsp_url -OutFile $Env:temp\$winfsp_msi
-  Write-Host "Installing WinFSP"
-  Start-Process -FilePath $Env:temp\$winfsp_msi -ArgumentList '/q' -WorkingDirectory "C:\Windows\Temp\" -Wait
-  Remove-Item $Env:temp\$winfsp_msi -Force
-}}
-
-$user_home = "$profile_dir\$username"
+# Some of these variables also need to be set in the $RegistrationScriptBlock
+$ErrorActionPreference = "Stop"
 $ProgressPreference = 'SilentlyContinue'
 $winfsp_url = "https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi"
 $winfsp_msi = "winfsp-2.0.23075.msi"
-$rclone_url = "https://github.com/rclone/rclone/releases/download/v1.68.0/rclone-v1.68.0-windows-amd64.zip"
-$rclone_zip = "rclone-v1.68.0-windows-amd64.zip"
-$rclone_bin = "C:\Program Files\Kasm\bin\rclone.exe"
+$kasm_agent_url = "https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_develop.exe"
+$kasm_agent_path = "C:\Users\Public\Downloads\kasm_service_installer.exe"
+$kasm_install_path = "C:\Program Files\Kasm"
+$kasm_log_file = "$($Env:Temp)\kasm_startup_script.log"
 
-# Download and install the Kasm Service
-Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Downloading Windows Service"
-Invoke-Webrequest -URI https://kasm-static-content.s3.amazonaws.com/kasm_windows_service_installer_x86_64_develop.exe -OutFile C:\Users\Public\Downloads\kasm_service_installer.exe
+# Ensure we're only making connections over TLS 1.2 or 1.3
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12,[Net.SecurityProtocolType]::Tls13
 
-Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Installing Windows Service"
-C:\Users\Public\Downloads\kasm_service_installer.exe /S
+Function New-LogMessage {{
+    param(
+        [Parameter(Mandatory=$false)][string]$LogFile=$kasm_log_file,
+        [Parameter(Mandatory=$false)][string]$LogName="Application",
+        [Parameter(Mandatory=$false)][string]$Source="kasm_startup_script",
+        [Parameter(Mandatory=$false)][int]$EventID=1000,
+        [Parameter(Mandatory=$true)][string]$EntryType,
+        [Parameter(Mandatory=$true)][string]$Message
+    )
 
-# Optionally download and install rclone and Winfsp, required for Cloud Storage Mapping to work
-Install-Winfsp
+    $Timestamp = $(Get-Date -Format o)
 
-for ($i = 1; $i -le 20; $i++) {{
-    Start-Sleep -s 3
-    $service = Get-Service -Name W32Time -ErrorAction SilentlyContinue
-
-    if ($service.Length -gt 0 -And (Test-Path -Path "C:\Users\Public\Downloads\kasm_service_installer.exe" -PathType Leaf)) {{
-        # Register the Kasm Service with the deployment
-        Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Registering the Windows Service with the Kasm deployment at {upstream_auth_address}"
-
-        net stop kasm
-        cd "C:\Program Files\Kasm"
-        .\agent.exe --register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}
-    
-        if ($LastExitCode -eq 0) {{
-            net start kasm
-            Start-Service -Name "Audiosrv"
-            Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Successfully installed and registered agent"
-            Exit 0
-        }} else {{
-            Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Error -Message "Registration of Agent failed: Check log output of kasm_service in EventViewer"
-            
-            Exit 1
-        }}
-    }} else {{
-        Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Information -Message "Service not found, trying again..."
+    try{{
+        Write-EventLog -LogName $LogName -Source $Source -EventID $EventID -EntryType $EntryType -Message $Message
+    }}catch{{
+        $ErrorLogObj = "$Timestamp`tUnable to write to eventlog:"
+        Out-File -InputObject $ErrorLogObj -FilePath $LogFile -Append -Encoding "utf8"
+    }}finally{{
+        $LogObj = "$Timestamp`t$Message"
+        Out-File -InputObject $LogObj -FilePath $LogFile -Append -Encoding "utf8"
     }}
 }}
 
-Write-EventLog -LogName "Application" -Source "kasm_startup_script" -EventID 1000 -EntryType Error -Message "Timed out waiting for Kasm Windows Service to be registered."
-Exit 1
+Function Install-Winfsp {{
+    New-LogMessage -EntryType "Information" -Message "Installing Winsfp"
+    try{{
+        Invoke-Webrequest -Uri $winfsp_url -OutFile $Env:temp\$winfsp_msi
+    }}catch{{
+        New-LogMessage  -EntryType "Warning" -Message "Failed to download Winsfp installer."
+        return
+    }}
+    Write-Host "Installing WinFSP"
+    Start-Process -FilePath $Env:temp\$winfsp_msi -ArgumentList '/q' -WorkingDirectory "C:\Windows\Temp\" -Wait
+    Remove-Item $Env:temp\$winfsp_msi -Force
+    New-LogMessage -EntryType "Information" -Message "Installed Winsfp"
+}}
+
+# Create eventlog source for logging
+if(-not $(Get-EventLog -LogName "Application" -Source "kasm_startup_script" -ErrorAction SilentlyContinue)){{
+    try{{
+        New-EventLog -LogName "Application" -Source "kasm_startup_script"
+    }}catch{{
+        New-LogMessage -EntryType "Warning" -Message "Failed to create Kasm Startup Script eventlog source"
+    }}
+}}
+
+New-LogMessage -EntryType "Information" -Message "Kasm startup script has started."
+
+# Download and install the Kasm Service
+New-LogMessage -EntryType "Information" -Message "Downloading Windows Service"
+try{{
+    Invoke-Webrequest -URI $kasm_agent_url -OutFile $kasm_agent_path
+}}catch{{
+    New-LogMessage -EntryType "Error" -Message "Failed to download Kasm agent installer"
+    Exit 1
+}}
+
+New-LogMessage -EntryType "Information" -Message "Installing Windows Service"
+& $kasm_agent_path /S
+
+# Optionally download and install Winfsp, required for Cloud Storage Mapping to work
+Install-Winfsp
+
+Start-Sleep -s 5
+
+$service = Get-Service -Name "kasm" -ErrorAction SilentlyContinue
+
+if (($service.Length -gt 0) -And (Test-Path -Path "$kasm_install_path\agent.exe" -PathType Leaf)) {{
+
+    Start-Sleep -s 5
+    New-LogMessage -EntryType "Information" -Message "Creating task to register the Windows Service as {server_id} with the Kasm deployment at {upstream_auth_address}"
+
+    # Kasm Manager won't provision the new server until the startup script completes, and we can't register the agent until the server is provisioned
+    # So we're going to base64-encode the script logic and launch it as a new Powershell process, which will allow the startup script to exit
+    $RegistrationScriptBlock={{
+
+        $kasm_log_file = "$($Env:Temp)\kasm_startup_script.log"
+        $kasm_install_path = "C:\Program Files\Kasm"
+        $Registration_Attempts=0
+
+        function Disable-SSLVerification {{
+            Add-Type -AssemblyName System.Web.Extensions
+        
+            Add-Type @" 
+                    using System.Net; 
+                    using System.Security.Cryptography.X509Certificates; 
+            
+                    public class NoSSLCheckPolicy : ICertificatePolicy {{ 
+                    public NoSSLCheckPolicy() {{}} 
+                    public bool CheckValidationResult( 
+                        ServicePoint sPoint, X509Certificate cert, 
+                        WebRequest wRequest, int certProb) {{
+                        return true; 
+                    }}
+                    }}
+"@ 
+            [System.Net.ServicePointManager]::CertificatePolicy = new-object NoSSLCheckPolicy
+        }}
+
+        Function New-LogMessage {{
+            param(
+                [Parameter(Mandatory=$false)][string]$LogFile=$kasm_log_file,
+                [Parameter(Mandatory=$false)][string]$LogName="Application",
+                [Parameter(Mandatory=$false)][string]$Source="kasm_startup_script",
+                [Parameter(Mandatory=$false)][int]$EventID=1000,
+                [Parameter(Mandatory=$true)][string]$EntryType,
+                [Parameter(Mandatory=$true)][string]$Message
+            )
+        
+            $Timestamp = $(Get-Date -Format o)
+        
+            try{{
+                Write-EventLog -LogName $LogName -Source $Source -EventID $EventID -EntryType $EntryType -Message $Message
+            }}catch{{
+                $ErrorLogObj = "$Timestamp`tUnable to write to eventlog:"
+                Out-File -InputObject $ErrorLogObj -FilePath $LogFile -Append -Encoding "utf8"
+            }}finally{{
+                $LogObj = "$Timestamp`t$Message"
+                Out-File -InputObject $LogObj -FilePath $LogFile -Append -Encoding "utf8"
+            }}
+        }}
+
+        Start-Sleep -s 10
+        New-LogMessage -EntryType "Information" -Message "Registering the Windows Service as {server_id} with the Kasm deployment at {upstream_auth_address}"
+        # Ensure we're only making connections over TLS 1.2 or 1.3
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12,[Net.SecurityProtocolType]::Tls13
+        # Disable SSL Verification for installs using self-signed certificates
+        Disable-SSLVerification
+
+        do{{
+            try{{
+                $API_Response=Invoke-RestMethod -Uri "https://{upstream_auth_address}/api/admin/get_server_file_mappings?token={checkin_jwt}" -UseBasicParsing -Method "GET" -ContentType "application/json"
+                if($API_Response -notmatch "Access Denied!"){{
+                    $Server_Registered=$true
+                    
+                }}else{{
+                    throw "Kasm Manager has not yet provisioned server"
+                }}
+            }}catch{{
+                Start-Sleep -s 20
+                if ($Registration_Attempts -ge 3){{
+                    New-LogMessage -EntryType "Error" -Message "Timed out after 60 seconds waiting for Kasm to provision server"
+                    Exit 1
+                }}
+                $Registration_Attempts++
+            }}
+        }}while(-not $Server_Registered)
+
+        Stop-Service -Name "kasm"
+        Set-Location -Path $kasm_install_path
+        & .\agent.exe --register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}
+        
+        if ($LastExitCode -eq 0) {{
+            Start-Service -Name "kasm"
+            Start-Service -Name "Audiosrv"
+            New-LogMessage -EntryType "Information" -Message "Successfully installed and registered agent"
+            Exit 0
+        }} else {{
+            New-LogMessage -EntryType "Information" Error "Registration of Agent failed: Check log output of kasm_service in EventViewer"
+            Exit 1
+        }}
+    }}
+
+    $Bytes = [System.Text.Encoding]::Unicode.GetBytes($RegistrationScriptBlock)
+    $EncodedScriptBlock =[Convert]::ToBase64String($Bytes)
+    Start-Process -FilePath "powershell" -ArgumentList "-EncodedCommand $EncodedScriptBlock"
+    
+}} else {{
+    New-LogMessage -EntryType "Error" -Message "Kasm service not found, unable to register"
+    Exit 1
+}}
 </powershell>
