@@ -71,7 +71,7 @@ try{{
 }}
 
 New-LogMessage -EntryType "Information" -Message "Installing Windows Service"
-& $kasm_agent_path /S
+Start-Process -Wait -Filepath $kasm_agent_path -ArgumentList "/S"
 
 # Optionally download and install Winfsp, required for Cloud Storage Mapping to work
 Install-Winfsp
@@ -162,9 +162,9 @@ if (($service.Length -gt 0) -And (Test-Path -Path "$kasm_install_path\agent.exe"
 
         Stop-Service -Name "kasm"
         Set-Location -Path $kasm_install_path
-        & .\agent.exe --register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}
+        Start-Process -Wait -Filepath ".\agent.exe" -ArgumentList "--register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}"
         
-        if ($LastExitCode -eq 0) {{
+        if ($?) {{
             Start-Service -Name "kasm"
             Start-Service -Name "Audiosrv"
             New-LogMessage -EntryType "Information" -Message "Successfully installed and registered agent"
