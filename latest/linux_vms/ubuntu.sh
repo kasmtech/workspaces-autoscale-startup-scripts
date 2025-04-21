@@ -30,7 +30,7 @@ install_kasmvnc (){{
   apt-get install -y gettext ssl-cert libxfont2
   apt-get install -y /tmp/kasmvncserver.deb
   rm -f /tmp/kasmvncserver.deb
-  ln -s $KASM_VNC_PATH/www/index.html $KASM_VNC_PATH/www/vnc.html
+  [ ! -e $KASM_VNC_PATH/www/vnc.html ] && ln -s $KASM_VNC_PATH/www/index.html $KASM_VNC_PATH/www/vnc.html
   cd /tmp
   mkdir -p $KASM_VNC_PATH/www/Downloads
   chown -R 0:0 $KASM_VNC_PATH
