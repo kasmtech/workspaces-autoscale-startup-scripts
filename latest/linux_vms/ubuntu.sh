@@ -23,7 +23,7 @@ install_xfce (){{
 install_kasmvnc (){{
   cd /tmp
   KASM_VNC_PATH=/usr/share/kasmvnc
-  BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.3.4/kasmvncserver_jammy_1.3.4_amd64.deb"
+  BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.3.3/kasmvncserver_jammy_1.3.3_amd64.deb"
   KASM_VNC_PASSWD={connection_password}
   KASM_VNC_USER={connection_username}
   wget "$BUILD_URL" -O kasmvncserver.deb
