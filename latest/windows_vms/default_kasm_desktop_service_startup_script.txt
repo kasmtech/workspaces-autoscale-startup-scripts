@@ -162,15 +162,16 @@ if (($service.Length -gt 0) -And (Test-Path -Path "$kasm_install_path\agent.exe"
 
         Stop-Service -Name "kasm"
         Set-Location -Path $kasm_install_path
-        Start-Process -Wait -Filepath ".\agent.exe" -ArgumentList "--register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}"
+        Start-Process -Wait -Filepath ".\agent.exe" -ArgumentList "--register-host {upstream_auth_address} --register-port 443 --server-id  {server_id} --register-token {checkin_jwt}" -RedirectStandardError ".\registration_err.log" -RedirectStandardOutput ".\registration_out.log"
         
         if ($?) {{
+            Remove-Item -Path ".\registration_*.log"
             Start-Service -Name "kasm"
             Start-Service -Name "Audiosrv"
             New-LogMessage -EntryType "Information" -Message "Successfully installed and registered agent"
             Exit 0
         }} else {{
-            New-LogMessage -EntryType "Information" Error "Registration of Agent failed: Check log output of kasm_service in EventViewer"
+            New-LogMessage -EntryType "Error" -Message "Registration of Agent failed: Check log output of kasm_service in EventViewer and $kasm_install_path\registration_*.log files"
             Exit 1
         }}
     }}
