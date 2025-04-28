@@ -35,7 +35,7 @@ runcmd:
     - qemu-guest-agent.service
   - IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
   - cd /tmp
-  - wget https://kasm-static-content.s3.amazonaws.com/kasm_release_1.17.0.bbc15c.tar.gz -O kasm.tar.gz
+  - wget https://kasm-static-content.s3.amazonaws.com/kasm_release_1.17.0.7f020d.tar.gz -O kasm.tar.gz
   - tar -xf kasm.tar.gz
   - |
     if [ -z "$GIVEN_FQDN" ] ||  [ "$GIVEN_FQDN" == "None" ]  ;
