@@ -1,81 +1,155 @@
-# VM Startup Script
-In Kasm Workspaces 1.15.0 and later the [VM Provider](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up. 
+# Windows Autoscale Scripts for Kasm Workspaces
 
-## Variables
+This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasmweb.com/docs/develop/guide/windows/auto_scaled_servers.html) functionality for [Kasm Workspaces](https://kasmweb.com/).
 
-Kasm replaces variables in the script that are wrapped in curly brackets, such as **{connection_username}**, with values. The following table lists the variables and a description.
+## Features
+- Kasm Windows Desktop Service - Install and register the Kasm Desktop Service
+- Windows Audio Service - Start Windows Audio Service
+- Windows Domain Join - Join the VM to a domain
+- DNS Configuration - Configure DNS for the primary network adapter
+- FSLogix - Install and configure container profiles
 
-| Variable Name         | Description                                                                                                                                                                                                                                                                                                          |
-|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| connection_username   | If the auto-scale configuration is set to use a static username for Kasm user sessions, the username will be contained in this variable.                                                                                                                                                                             |
-| connection_password   | If the auto-scale configuration is set to use a static password for Kasm user sessions, this variable will contain the password.                                                                                                                                                                                     |
-| ad_join_credential    | If the auto-scale configuration is set to join the VM to an Active Directory domain, Kasm creates the AD record and sets a random password that can only be used for joining the VM to the domain. This can then be used in a Powershell startup script to complete the process of joining the system to the domain. |
-| domain                | If the auto-scale configuration is set to join the VM to an Active Directory domain, this variable will contain the name of the domain.                                                                                                                                                                              |
-| registration_token    | This is the token that is provided to the script to allow the windows agent component to register with Kasm.                                                                                                                                                                                                         |
-| server_id             | The unique ID created by Kasm for this server, which is needed for the installation of the Kasm Windows Agent.                                                                                                                                                                                                       |
-| upstream_auth_address | The upstream auth setting defined for the Zone. See the section below dedicated to this setting.                                                                                                                                                                                                                     |
+## Compatibiliy
+![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.0%20%7C%201.17.0%20%7C%201.16.1-blue?style=flat-square)
 
-### Escaping Brackets
-If your script uses curly brackets, aside from Kasm variables, you must escape them by doubling them up. Here is an example.
+| Provider              | ![Windows 10](https://custom-icon-badges.demolab.com/badge/Windows_10-0078D6?logo=windows11&logoColor=white) | ![Windows 11](https://custom-icon-badges.demolab.com/badge/Windows_11-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2022](https://custom-icon-badges.demolab.com/badge/Windows_Server_2022-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2025](https://custom-icon-badges.demolab.com/badge/Windows_Server_2025-0078D6?logo=windows11&logoColor=white) |
+|-----------------------|:--------------:|:--------------:|:--------------:|:--------------:|
+| ![AWS](https://custom-icon-badges.demolab.com/badge/AWS-%23FF9900.svg?logo=aws&logoColor=white) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Microsoft Azure](https://custom-icon-badges.demolab.com/badge/Microsoft%20Azure-0089D6?logo=msazure&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![DigitalOcean](https://img.shields.io/badge/DigitalOcean-%230167ff.svg?logo=digitalOcean&logoColor=white) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-%234285F4.svg?logo=google-cloud&logoColor=white) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |  ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Harvester](https://img.shields.io/badge/-Harvester-00a383) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Verified](https://img.shields.io/badge/Verified-green) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Nutanix](https://img.shields.io/badge/-Nutanix-024DA1?style=flat&logo=nutanix&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![OpenStack](https://img.shields.io/badge/-OpenStack-ED1944?style=flat&logo=openstack&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Oracle Cloud](https://custom-icon-badges.demolab.com/badge/Oracle%20Cloud-F80000?logo=oracle&logoColor=white) | ![N/A](https://img.shields.io/badge/N/A-gray?Color=white) | ![N/A](https://img.shields.io/badge/N/A-gray) | ![Verified](https://img.shields.io/badge/Verified-green) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![Proxmox](https://img.shields.io/badge/-Proxmox-E57000?style=flat&logo=proxmox&logoColor=white) | ![Verified](https://img.shields.io/badge/Verified-green) | ![Verified](https://img.shields.io/badge/Verified-green) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+| ![vSpere](https://img.shields.io/badge/-VMware_vSpere-607078?style=flat&logo=vmware&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
+ 
+## Dependencies
+[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-develop-blue?style=flat-square)](https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html#installation)
+[![WinFsp](https://img.shields.io/badge/WinFsp-2.0.23075-blue?style=flat-square)](https://winfsp.dev/)
+[![FSLogix](https://img.shields.io/badge/FSLogix-latest-blue?style=flat-square)](https://learn.microsoft.com/fslogix/)
 
+This startup script installs additional dependencies required by the configured features.
+
+## Usage
+The scripts in this repository are published as a ZIP archive and are intended for use in the **Startup Script** field of a Kasm Workspaces Autoscale Configuration. Features within these scripts are controlled by arguments passed to `Init-VM.ps1`. If a required feature argument is omitted, the corresponding feature will be skipped during installation and configuration at autoscale.
+
+Special placeholder tokens (ex: `{some_variable}`) can be used in the Startup Script field to pass values from the Kasm Workspaces deployment into the Startup Scripts. These tokens are only resolved within the Startup Script field itself and are not replaced in any external scripts that are executed by the Kasm Startup Script.
+
+#### Example Startup Script
 ```powershell
-$joinCred = New-Object pscredential -ArgumentList ([pscustomobject]@{{ UserName = $null; Password = (ConvertTo-SecureString -String '{ad_join_credential}' -AsPlainText -Force)[0] }})
+#ps1_sysnative
+
+$StartupScriptArchive = "kasm-windows-startup.zip"
+$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/develop/$StartupScriptArchive"
+$WorkingDirectory = "$($Env:Temp)"
+$InitScript = "$WorkingDirectory\Init-VM.ps1"
+$ProgressPreference = "SilentlyContinue" # improve Invoke-Webrequest performance
+
+Write-Output "`nInitiating Kasm Startup Script"
+
+try {{
+    Write-Output "`nDownloading $StartupScriptUrl"
+    Invoke-Webrequest -URI $StartupScriptUrl -OutFile "$WorkingDirectory\$StartupScriptArchive"
+}} catch {{
+    Write-Output "Request failed: $($_.Exception.Message)"
+}}
+
+Write-Output "Extracting archive $WorkingDirectory\$StartupScriptArchive"
+Expand-Archive -Path "$WorkingDirectory\$StartupScriptArchive" -DestinationPath $WorkingDirectory
+
+
+### INSERT EXECUTION COMMAND HERE ###
 ```
 
-In this example, curly open and closing brackets that are not in reference to Kasm variables, are doubled up.
-
-## Script Variations
-
-There are two important factors that determine what should be in the script, and we provide a few examples in this repository. The first is the cloud service provider and the second is whether Windows local accounts will be used or Active Directory accounts.
-
-### Cloud Service Providers
-
-Each cloud service provider behaves a bit differently and may expect the startup script in a different format.
-
-#### Azure
-
-Unlike most other cloud providers, Azure does not automatically execute the custom data script on startup. You must create a custom Azure VM Image with sysprep and configure Windows such that C:\AzureData\CustomData.bin is executed at startup. There a number of different methods that could be used to do this, the following is a method that we have used and is known to work. Kasm Technologies is providing this as an open source reference. This should be adapted to meet your specific use-case and security requirements.
-
-Start a new VM using the appropriate base image. Install the required software and configure as needed for your use-case.
-
-Create a file at `C:\AzureData\startup.cmd` with the following content.
-```
-schtasks /Delete /TN "DomainJoin" /F
-cd C:\AzureData
-ren CustomData.bin CustomData.ps1
-PowerShell -Command "Set-ExecutionPolicy Unrestricted"
-PowerShell -file C:\AzureData\CustomData.ps1
+#### Example Execution Command
+```powershell
+Write-Output "Executing $InitScript"
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}" `
+  -DomainName "{domain}" `
+  -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
+  -DnsServers "10.0.0.52" ` # Your DNS Server IP address
+  -ServerName "{server_hostname}" `
+  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles" # Your profile storage location
 ```
 
-Open a Windows Command Prompt as admin and execute the following command to create a scheduled task that will execute the above script at startup.
+### Kasm Windows Desktop Service
+The [Kasm Windows Desktop Service]("https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html") provides additional capabilities to users that are connected to the desktop through Kasm Workspaces. To utilize these features the Desktop Service must be installed and registered with Kasm Workspaces. 
+
+| Varible              | Required     | Type   |  Description     |
+|----------------------|--------------|--------|-----------------|
+| $KasmHostname        | Required     | string | The resolvable hostname, IP, or FQDN of the KASM API server. If used in the Startup Script, the token `{upstream_auth_address}` will be replaced with the value of "Zone" > "Upstream Auth Address" from the autoscale configuration's zone. |
+| $RegistrationToken   | Required     | string | The registration token (JWT) created by Kasm for the newly created server. If used in the Startup Script, the token `{checkin_jwt}` will be replaced with a Kasm-generated registration token that is valid for 4 hours. |
+| $ServerId            | Required     | string | The UUID created by Kasm for the new server, found in the Server's "Server Id" field in the Kasm UI. If used in the Startup Script, the token `{server_id}` will be replaced with the correct value automatically. |
+
+#### Example - Install and Register Kasm Windows Desktop Service Only  
+```powershell
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}"
 ```
-schtasks /create /tn "DomainJoin" /sc onstart /delay 0000:30 /rl highest /ru system /tr "cmd /c C:\AzureData\startup.cmd  > C:\AzureData\startup.log 2>&1"
+
+### Windows Audio Service
+This startup script package will automatically enable the Windows Audio service if disabled. This is useful when using a Windows Server OS for VDI as the Auidsrv is not started automatically.
+
+| Varible                | Required     | Type |  Description     |
+|------------------------|--------------|------|------------------|
+| $StartAudioService     | Optional     | bool | Enables the Windows Audio service and sets startup to Automatic. Default is true. |
+
+#### Example - Kasm Windows Desktop Service without enabling Audiosrv
+```powershell
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}" `
+  -StartAudioService $false
 ```
 
-Now run sysprep on the VM and shut it down, use the Azure portal to create a new VM Image using Azure's [documentation](https://learn.microsoft.com/en-us/azure/virtual-machines/generalize#windows).
+### Domain Join
+Connect a computer to an Active Directory domain. Additional setup information for domain joining Kasm autoscaled VMs can be found [here](https://docs.kasmweb.com/docs/develop/guide/windows/auto_scaled_servers#auto-join-active-directory).
 
-Now update your Kasm deployment's VM Provider configuration in your Server Pool, to point to the newly created image. When a VM created by Kasm is created, it will execute the startup script on boot. The startup script will remove the scheduled task, execute the PowerShell script injected by Kasm, and then delete that powershell script. 
+| Varible                | Required     | Type   | Description     |
+|------------------------|--------------|--------|-----------------|
+| $DomainName            | Requried     | string | The Windows Domain that the VM will join. If used in the Startup Script, the token `{domain}` will be replaced with the domain constructed from the "Authentication" > "LDAP Configuration" > "Search Base" from the LDAP Config specified in the Autoscale Config. |
+| $DomainJoinCredential  | Required     | string | The account credential used to join the computer to the domain. If used in teh Startup Script, the token `{ad_join_credential}` will be replaced with an appropriate value generated by Kasm and set on the machine. |
+| $DnsServers            | Optional     | string | To join the Windows VM to the domain, it is necessary for the VM to be able to resolve the domain controller. If DNS is not preconfigured as part of the VM image, then this varible can be used to configure DNS to point to the domain controller. |
+| $ServerName            | Optional     | string | Sets the VM hostname to this value if necessary. Token `{server_hostname}` represents the name of the computer object added to Active Directory by Kasm. If your Windows template or hypervisor are not utilizing CloudBase-Init, it might be necessary to rename the computer to match the Active Directory record created by Kasm. |
 
-The example [azure_join_ad.txt](./azure_join_ad.txt) joins the system to the domain and reboots it. This assumes that the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) is set to auto join VMs to the domain and that LDAP SSO is configured.
+#### Example - Configure DNS, Rename Computer to match Active Directory Entry, and Join Domain
+```powershell
+& $InitScript `
+  -DomainName "{domain}" `
+  -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
+  -DnsServers "10.0.0.52" ` # Your DNS Server IP address
+  -ServerName "{server_hostname}"
+```
 
-See our Windows Server video, which walks through auto AD joining and LDAP SSO.
-<iframe src='https://www.youtube.com/embed/_WCee4-E4vA' frameborder='0' allowfullscreen></iframe>
+### FSLogix
+
+| Varible                   | Required | Type | Description     |
+|---------------------------|----------|------|------------|
+| $FSLogix_ProfileLocations | Required | string | Virtual Hard Disk or Cloud Cache location(s) for FSLogix container profile storage. |
+| $FSLogix_CloudCache       | Optional | bool   | Enables FSLogix [Cloud Cache](https://learn.microsoft.com/en-us/fslogix/concepts-fslogix-cloud-cache) feature. Default is false. |
+| $FSLogix_ProfileType      | Optional | int    | Sets the FSLogix profile type. Default is 3, which supports cocurrent writable sessions. Use 1 for a single writable session. |
+
+#### Example - Join Domain, Install FSLogix and Configure Virtual Hard Disk Location
+```powershell
+& $InitScript `
+  -DomainName "{domain}" `
+  -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
+  -ServerName "{server_hostname}"
+  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles" # Your profile storage location
+```
+
+## Logging
+The scripts in this repository write all output as both Windows Events that can be viewed in Windows Event Viewer and text based logs that can be found at `C:\Users\cloudbase-init\AppData\Local\Temp\kasm_startup_script.log`.
+
+When available, Kasm Windows Autoscaling utilizes Cloudbase-Init to execute the configured Startup Scripts. For autoscale errors that occur prior to invoking `Init-VM.ps1`, refer to the Cloudbase logs found at `C:\Program Files\Cloudbase Solutions\Cloudbase-Init\log\cloudbase-init.log`.
 
 
-#### AWS 
-AWS needs to have the PowerShell script defined in XML. See our example [aws_local_accounts.txt](./aws_local_account.txt) which creates a local Windows account using the username and password that are configured in the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) connection settings. 
 
-#### Default Scripts
-Some cloud providers do not require custom startup scripts. The example scripts starting with the **default** keyword should be used unless there is custom example script for the cloud provider you wish to configure:
-
-The [default_local_accounts.txt](./default_local_account.txt) example script, which creates a local Windows account using the username and password that are configured in the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) connection settings. 
-
-The [default_kasm_desktop_service_startup_script.txt](./default_kasm_desktop_service_startup_script.txt) example script, which installs the Kasm Desktop Service automatically and registers with your deployment on boot of the VM.
-
-### Kasm Desktop Service
-The [Kasm Desktop service](https://www.kasmweb.com/docs/latest/guide/windows/windows_service.html) provides many features and is highly recommended to install. One of the feature it provides is automatic Kasm managed local Windows accounts. With the service installed, the above two script examples that create a local Windows account are unnecessary. Instead, the service will automatically create local Windows accounts, unique to each Kasm user, one a new session is created. A randomized password is used for each session. The username in Windows of a user contains portions of the Kasm username and user ID. See the [aws_kasm_desktop_service_startup_script.txt](./aws_kasm_desktop_service_startup_script.txt) and [default_kasm_desktop_service_startup_script.txt](./default_kasm_desktop_service_startup_script.txt) for examples of how to install the Kasm Desktop Service automatically and have it register with your deployment on boot of the VM.
-
-The examples that install the Kasm Desktop Service also install [WinSFP](https://github.com/winfsp/winfsp), an optional component that is required for [Cloud Storage Mapping](https://www.kasmweb.com/docs/latest/guide/storage_mappings.html) to function. 
-
-### Upstream Auth Address
-The windows agent installation scripts assume that you have configured the **Upstream Auth Address** zone setting to an actual IP address or hostname. Therefore, you either need to configure the **Upstream Auth Address** in the Zone settings or you need to remove the `{upstream_auth_address}` in the windows agent installation scripts and replace it with an IP address or hostname of one of the managers in the zone. The manager, is one of the services running on the webapp role server. If you have multiple in the Zone, you could create DNS A records to point to all of them, or you could use a load balancer.

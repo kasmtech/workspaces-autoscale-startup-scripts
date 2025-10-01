@@ -1,0 +1,12 @@
+[project]
+name = "win_startup_scripts_build"
+version = "0.0.0.dev"
+description = "Template processing and packaging tools for Kasm Windows Autoscale Startup Scripts"
+requires-python = ">=3.12.0, <3.14"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

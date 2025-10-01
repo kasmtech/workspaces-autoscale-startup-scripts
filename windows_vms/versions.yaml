@@ -1,0 +1,24 @@
+# Values file for template token replacement
+#
+# USAGE:
+# - Reference values in this file from /src files: {{ version }} -> 2.0.0
+# - Use dot notation for nested values: {{ parent.child.grandchild }}
+# - Only string values are supported, case-sensitive key matching
+# - Token matching is case sensitive
+#
+# LIMITATIONS:
+# - Array index access is NOT supported (e.g., {{ kasmWorkspaces.supportedVersions.[0] }})
+
+version: 2.0.0
+kasmDesktopService:
+  version: develop
+  installer: kasm_windows_service_installer_x86_64_{{ kasmDesktopService.version }}.exe
+  downloadUrl: https://kasm-static-content.s3.amazonaws.com/{{ kasmDesktopService.installer }}
+winFsp:
+  version: 2.0.23075
+  installer: winfsp-{{ winFsp.version }}.msi
+  downloadUrl: https://github.com/winfsp/winfsp/releases/download/v2.0/{{ winFsp.installer }}
+fsLogix:
+  version: latest
+  installer: FSLogix_{{ fsLogix.version }}.zip
+  downloadUrl: https://aka.ms/fslogix_download
