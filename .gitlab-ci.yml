@@ -1,0 +1,55 @@
+image: docker:24.0.6
+services:
+  - docker:24.0.6-dind
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_AUTH_CONFIG: ${_DOCKER_AUTH_CONFIG}
+
+default:
+  tags:
+    - oci-fixed-amd
+
+workflow:
+  rules:
+    - when: always
+
+before_script:
+  - SANITIZED_BRANCH=$(echo $CI_COMMIT_REF_NAME | sed -r 's#^release/##' | sed 's/\//_/g')
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  image: python:3.12
+  variables:
+    VENV_PATH: "/opt/poetry"
+  script:
+    - apt-get update -y
+    - python3 -m venv "$VENV_PATH"
+    - source "$VENV_PATH"/bin/activate
+    - pip install poetry
+    - cd windows_vms/build/
+    - poetry install
+    - cd $OLDPWD
+    - bash windows_vms/build/build.sh
+  artifacts:
+    paths:
+      - windows_vms/dist/kasm-windows-startup.zip
+
+deploy:
+  stage: deploy
+  image: 
+    name: amazon/aws-cli
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "develop"
+  script:
+    - S3_DOC_BUCKET=kasmweb-build-artifacts
+    - ZIP_PATH=kasm-autoscale-scripts/${CI_COMMIT_REF_NAME}
+    - S3_URL="https://${S3_DOC_BUCKET}.s3.amazonaws.com/${ZIP_PATH}/kasm-windows-startup.zip"
+    - aws s3 cp windows_vms/dist/kasm-windows-startup.zip s3://${S3_DOC_BUCKET}/${ZIP_PATH}/kasm-windows-startup.zip
+    - curl --request POST --header "PRIVATE-TOKEN:${GITLAB_API_TOKEN}" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/statuses/${CI_COMMIT_SHA}?state=success&name=kasm-windows-startup.zip&target_url=${S3_URL}"
