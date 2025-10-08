@@ -72,9 +72,9 @@ Write-Output "Executing $InitScript"
   -ServerId "{server_id}" `
   -DomainName "{domain}" `
   -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
-  -DnsServers "10.0.0.52" ` # Your DNS Server IP address
+  -DnsServers "10.0.0.52" `
   -ServerName "{server_hostname}" `
-  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles" # Your profile storage location
+  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles"
 ```
 
 ### Kasm Windows Desktop Service
@@ -125,7 +125,7 @@ Connect a computer to an Active Directory domain. Additional setup information f
 & $InitScript `
   -DomainName "{domain}" `
   -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
-  -DnsServers "10.0.0.52" ` # Your DNS Server IP address
+  -DnsServers "10.0.0.52" `
   -ServerName "{server_hostname}"
 ```
 
@@ -142,8 +142,8 @@ Connect a computer to an Active Directory domain. Additional setup information f
 & $InitScript `
   -DomainName "{domain}" `
   -ActiveDirectoryCredential (ConvertTo-SecureString -String "{ad_join_credential}" -AsPlainText -Force) `
-  -ServerName "{server_hostname}"
-  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles" # Your profile storage location
+  -ServerName "{server_hostname}" `
+  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles"
 ```
 
 ## Logging
