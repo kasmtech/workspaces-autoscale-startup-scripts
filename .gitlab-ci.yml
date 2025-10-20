@@ -47,9 +47,10 @@ deploy:
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_REF_NAME == "develop"
+    - if: $CI_COMMIT_REF_NAME =~ /^release\/.*$/
   script:
     - S3_DOC_BUCKET=kasmweb-build-artifacts
-    - ZIP_PATH=kasm-autoscale-scripts/${CI_COMMIT_REF_NAME}
+    - ZIP_PATH=kasm-autoscale-scripts/${SANITIZED_BRANCH}
     - S3_URL="https://${S3_DOC_BUCKET}.s3.amazonaws.com/${ZIP_PATH}/kasm-windows-startup.zip"
     - aws s3 cp windows_vms/dist/kasm-windows-startup.zip s3://${S3_DOC_BUCKET}/${ZIP_PATH}/kasm-windows-startup.zip
     - curl --request POST --header "PRIVATE-TOKEN:${GITLAB_API_TOKEN}" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/statuses/${CI_COMMIT_SHA}?state=success&name=kasm-windows-startup.zip&target_url=${S3_URL}"
