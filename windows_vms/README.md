@@ -1,6 +1,6 @@
 # Windows Autoscale Scripts for Kasm Workspaces
 
-This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasmweb.com/docs/develop/guide/windows/auto_scaled_servers.html) functionality for [Kasm Workspaces](https://kasmweb.com/).
+This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasm.com/docs/guide/windows/auto_scaled_servers.html) functionality for [Kasm Workspaces](https://kasmweb.com/).
 
 ## Features
 - Kasm Windows Desktop Service - Install and register the Kasm Desktop Service
@@ -26,7 +26,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 | ![vSpere](https://img.shields.io/badge/-VMware_vSpere-607078?style=flat&logo=vmware&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
  
 ## Dependencies
-[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-develop-blue?style=flat-square)](https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html#installation)
+[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-develop-blue?style=flat-square)](https://docs.kasm.com/docs/guide/windows/windows_service.html#installation)
 [![WinFsp](https://img.shields.io/badge/WinFsp-2.0.23075-blue?style=flat-square)](https://winfsp.dev/)
 [![FSLogix](https://img.shields.io/badge/FSLogix-latest-blue?style=flat-square)](https://learn.microsoft.com/fslogix/)
 
@@ -42,7 +42,7 @@ Special placeholder tokens (ex: `{some_variable}`) can be used in the Startup Sc
 #ps1_sysnative
 
 $StartupScriptArchive = "kasm-windows-startup.zip"
-$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/develop/$StartupScriptArchive"
+$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/1.18.0/$StartupScriptArchive"
 $WorkingDirectory = "$($Env:Temp)"
 $InitScript = "$WorkingDirectory\Init-VM.ps1"
 $ProgressPreference = "SilentlyContinue" # improve Invoke-Webrequest performance
@@ -78,7 +78,7 @@ Write-Output "Executing $InitScript"
 ```
 
 ### Kasm Windows Desktop Service
-The [Kasm Windows Desktop Service]("https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html") provides additional capabilities to users that are connected to the desktop through Kasm Workspaces. To utilize these features the Desktop Service must be installed and registered with Kasm Workspaces. 
+The [Kasm Windows Desktop Service]("https://docs.kasm.com/docs/guide/windows/windows_service.html") provides additional capabilities to users that are connected to the desktop through Kasm Workspaces. To utilize these features the Desktop Service must be installed and registered with Kasm Workspaces. 
 
 | Varible              | Required     | Type   |  Description     |
 |----------------------|--------------|--------|-----------------|
@@ -111,7 +111,7 @@ This startup script package will automatically enable the Windows Audio service 
 ```
 
 ### Domain Join
-Connect a computer to an Active Directory domain. Additional setup information for domain joining Kasm autoscaled VMs can be found [here](https://docs.kasmweb.com/docs/develop/guide/windows/auto_scaled_servers#auto-join-active-directory).
+Connect a computer to an Active Directory domain. Additional setup information for domain joining Kasm autoscaled VMs can be found [here](https://docs.kasm.com/docs/guide/windows/auto_scaled_servers#auto-join-active-directory).
 
 | Varible                | Required     | Type   | Description     |
 |------------------------|--------------|--------|-----------------|

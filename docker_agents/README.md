@@ -1,5 +1,5 @@
 # Docker Agent Startup Script
-In Kasm Workspaces 1.15.0 the [VM Provider](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up.
+In Kasm Workspaces 1.18.0 the [VM Provider](https://docs.kasm.com/docs/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://docs.kasm.com/docs/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up.
 
 ## Edits Required
 The following subsections cover what edits to the script are required for each deployment and zone.
@@ -36,7 +36,7 @@ echo "${{VARIABLE}}"
 In the above example, we used curly brackets around the use of the variable, as this is valid bash syntax. You must double each use of the opening and closing curly brackets.
 
 ### Upstream Auth Address
-The [Upstream Auth Address](https://www.kasmweb.com/docs/latest/guide/zones/deployment_zones.html#configuring-deployment-zones) is a Zone setting that by default is `$request_host$`, which is a magic variable that gets replaced with the hostname of the request made by the user. When an agent gets a request for a specific container's KasmVNC session, it needs to authenticate the request. If the respective Zone's **Upstream Auth Address** is set to `$request_host$`, the auth request is sent to that host. This works in most basic scenarios, but in complex deployments may not be what is desired.
+The [Upstream Auth Address](https://docs.kasm.com/docs/guide/zones/deployment_zones.html#configuring-deployment-zones) is a Zone setting that by default is `$request_host$`, which is a magic variable that gets replaced with the hostname of the request made by the user. When an agent gets a request for a specific container's KasmVNC session, it needs to authenticate the request. If the respective Zone's **Upstream Auth Address** is set to `$request_host$`, the auth request is sent to that host. This works in most basic scenarios, but in complex deployments may not be what is desired.
 
 The [ubuntu.sh](./ubuntu.sh) script assumes that you have configured the **Upstream Auth Address** zone setting to an actual IP address or hostname. Therefore, you either need to configure the **Upstream Auth Address** in the Zone settings or you need to remove the `{upstream_auth_address}` in the ubuntu.sh script and replace it with an IP address or hostname of one of the managers in the zone. The manager, is one of the services running on the webapp role server. If you have multiple in the Zone, you could create DNS A records to point to all of them or you could use a load balancer.
 
