@@ -11,7 +11,7 @@
 
 version: 2.0.0
 kasmDesktopService:
-  version: 1.7.c54746a56
+  version: 1.7_c54746a56
   installer: kasm_windows_service_installer_x86_64_{{ kasmDesktopService.version }}.exe
   downloadUrl: https://kasm-static-content.s3.us-east-1.amazonaws.com/{{ kasmDesktopService.installer }}
 winFsp:
