@@ -9,8 +9,8 @@ This repository contains PowerShell scripts designed to enable and configure Win
 - DNS Configuration - Configure DNS for the primary network adapter
 - FSLogix - Install and configure container profiles
 
-## Compatibiliy
-![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.0%20%7C%201.17.0%20%7C%201.16.1-blue?style=flat-square)
+## Compatibility
+![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.0-blue?style=flat-square)
 
 | Provider              | ![Windows 10](https://custom-icon-badges.demolab.com/badge/Windows_10-0078D6?logo=windows11&logoColor=white) | ![Windows 11](https://custom-icon-badges.demolab.com/badge/Windows_11-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2022](https://custom-icon-badges.demolab.com/badge/Windows_Server_2022-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2025](https://custom-icon-badges.demolab.com/badge/Windows_Server_2025-0078D6?logo=windows11&logoColor=white) |
 |-----------------------|:--------------:|:--------------:|:--------------:|:--------------:|
@@ -26,7 +26,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 | ![vSpere](https://img.shields.io/badge/-VMware_vSpere-607078?style=flat&logo=vmware&logoColor=white) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) | ![Not Verified](https://img.shields.io/badge/Not_Verified-gray) |
  
 ## Dependencies
-[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-develop-blue?style=flat-square)](https://docs.kasm.com/docs/guide/windows/windows_service.html#installation)
+[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-1.7.c54746a56-blue?style=flat-square)](https://docs.kasm.com/docs/guide/windows/windows_service.html#installation)
 [![WinFsp](https://img.shields.io/badge/WinFsp-2.0.23075-blue?style=flat-square)](https://winfsp.dev/)
 [![FSLogix](https://img.shields.io/badge/FSLogix-latest-blue?style=flat-square)](https://learn.microsoft.com/fslogix/)
 
