@@ -40,9 +40,14 @@ Function Install-Winfsp {
     if ($InstallerPath) {
         Write-Log "Installing WinFSP"
         Write-Log "Invoking $InstallerPath"
-        
-        Start-Process -FilePath $InstallerPath -ArgumentList '/q' -WorkingDirectory $ScriptDirectory -Wait
-    
+
+        try {
+            Start-Process -FilePath $InstallerPath -ArgumentList '/q' -WorkingDirectory $ScriptDirectory -Wait
+        } catch {
+            Write-Log "Error installing WinFSP: $($_.Exception.Message)"
+            return
+        }
+
         #Remove-Item $InstallerPath -Force
         Write-Log "Installed WinFSP" 
     } else {
