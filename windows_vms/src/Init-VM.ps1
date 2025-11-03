@@ -5,7 +5,7 @@ param(
     [string]$DomainName,
 
     [Parameter(Mandatory=$false)]
-    [securestring]$ActiveDirectoryCredential,
+    [string]$ActiveDirectoryCredential,
     
     [Parameter(Mandatory=$false)]
     [string[]]$DnsServers,
@@ -54,7 +54,7 @@ Function Invoke-DesktopServiceScript {
     } elseif (-not $ServerId) {
         Write-Log "No value set for ServerId. Skipping Kasm Desktop Service installation."
     } else {
-        Write-Log "Desktop service configuation detected"
+        Write-Log "Desktop service configuration detected"
 
         if (Test-FileExists -Path $DesktopServiceScript) {
             Write-Log "Invoking $DesktopServiceScript"
@@ -90,7 +90,7 @@ Function Invoke-DomainJoinAndFSLogixScripts {
             Invoke-InstallFSLogix
 
             Write-Log "Invoking $DomainJoinScript"
-            & $DomainJoinScript -DomainName $DomainName -ActiveDirectoryCredential $ActiveDirectoryCredential -DnsServers $DnsServers -ServerName $ServerName
+            & $DomainJoinScript -DomainName $DomainName -ActiveDirectoryCredential (ConvertTo-SecureString -String $ActiveDirectoryCredential -AsPlainText -Force) -DnsServers $DnsServers -ServerName $ServerName
         } else {
             Write-Log "Domain join script does not exist: $DomainJoinScript" -EntryType "Error"
         }
