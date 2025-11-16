@@ -1,5 +1,5 @@
 # Docker Agent Startup Script
-In Kasm Workspaces 1.18.0 the [VM Provider](https://docs.kasm.com/docs/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://docs.kasm.com/docs/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up.
+In Kasm Workspaces 1.18.x the [VM Provider](https://docs.kasm.com/docs/guide/compute/pools.html#vm-provider-configs) configuration is defined in a Server Pool's [Auto Scaling](https://docs.kasm.com/docs/guide/compute/pools.html#autoscale-configurations) configuration. Each VM provider corresponds to a cloud service provider or hypervisor. The VM Provider configuration has a place to define a startup script, which will be executed when the VM boots up.
 
 ## Edits Required
 The following subsections cover what edits to the script are required for each deployment and zone.
