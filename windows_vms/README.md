@@ -10,7 +10,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 - FSLogix - Install and configure container profiles
 
 ## Compatibility
-![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.0-blue?style=flat-square)
+![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.1-blue?style=flat-square)
 
 | Provider              | ![Windows 10](https://custom-icon-badges.demolab.com/badge/Windows_10-0078D6?logo=windows11&logoColor=white) | ![Windows 11](https://custom-icon-badges.demolab.com/badge/Windows_11-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2022](https://custom-icon-badges.demolab.com/badge/Windows_Server_2022-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2025](https://custom-icon-badges.demolab.com/badge/Windows_Server_2025-0078D6?logo=windows11&logoColor=white) |
 |-----------------------|:--------------:|:--------------:|:--------------:|:--------------:|
@@ -42,7 +42,7 @@ Special placeholder tokens (ex: `{some_variable}`) can be used in the Startup Sc
 #ps1_sysnative
 
 $StartupScriptArchive = "kasm-windows-startup.zip"
-$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/1.18.0/$StartupScriptArchive"
+$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/1.18.1/$StartupScriptArchive"
 $WorkingDirectory = "$($Env:Temp)"
 $InitScript = "$WorkingDirectory\Init-VM-Task.ps1"
 $ProgressPreference = "SilentlyContinue" # improve Invoke-Webrequest performance
