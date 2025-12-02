@@ -147,7 +147,7 @@ Connect a computer to an Active Directory domain. Additional setup information f
 ```
 
 ## Logging
-The scripts in this repository write all output as both Windows Events that can be viewed in Windows Event Viewer and text based logs that can be found at `C:\Users\cloudbase-init\AppData\Local\Temp\kasm_startup_script.log`.
+The scripts in this repository write all output as both Windows Events that can be viewed in Windows Event Viewer and text based logs that can be found at `C:\Users\cloudbase-init\AppData\Local\Temp\kasm_startup_script.log`. The Kasm Desktop Service installer executable does not send its own logs to the Windows Event Viewer, but its text based logs can be found in `C:\Users\cloudbase-init\AppData\Local\Temp\kasm_agent_install-{timestamp}.log`, where `{timestamp}` takes the form of `yymmdd-hhmmss`, e.g. `kasm_agent_install-20251016-123456.log`.
 
 When available, Kasm Windows Autoscaling utilizes Cloudbase-Init to execute the configured Startup Scripts. For autoscale errors that occur prior to invoking `Init-VM.ps1`, refer to the Cloudbase logs found at `C:\Program Files\Cloudbase Solutions\Cloudbase-Init\log\cloudbase-init.log`.
 

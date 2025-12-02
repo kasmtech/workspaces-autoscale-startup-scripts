@@ -113,8 +113,12 @@ Function Install-KasmDesktopService {
         Write-Log "Invoking $InstallerPath"
 
         try {
-            Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait -NoNewWindow
-            Write-Log "Installer completed successfully"
+            $KasmInstallProc = Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait -NoNewWindow -PassThru
+            if ($KasmInstallProc.ExitCode -eq 0) {
+                Write-Log "Installer completed successfully"
+            } else {
+                throw $KasmInstallProc.ExitCode
+            }
         } catch {
             $ErrorMessage = "Failed to run installer: $_"
             throw $ErrorMessage
@@ -187,6 +191,8 @@ Function Register-KasmDesktopService {
     Test-RegistrationToken
 
     Write-Log "Registering the Windows Service as $ServerId with the Kasm deployment at $KasmHostname"
+    $RegisterStdout = "$ScriptDirectory\kasm_register_stdout.txt"
+    $RegisterStderr = "$ScriptDirectory\kasm_register_stderr.txt"
 
     try {
         $AwaitDomainFlag = ""
@@ -195,8 +201,16 @@ Function Register-KasmDesktopService {
             Write-Log "Setting flag --await-domain to $true"
         }
 
-        Start-Process -FilePath $KasmInstallPath\agent.exe -ArgumentList "/S --register-host $KasmHostname --register-port 443 --server-id $ServerId --register-token $RegistrationToken $AwaitDomainFlag" -Wait
-        Write-Log "Registration completed successfully"
+        $KasmRegisterProc = Start-Process -FilePath $KasmInstallPath\agent.exe -ArgumentList "/S --register-host $KasmHostname --register-port 443 --server-id $ServerId --register-token $RegistrationToken $AwaitDomainFlag" -Wait -PassThru -RedirectStandardOutput "$RegisterStdout" -RedirectStandardError "$RegisterStderr"
+        if ($KasmRegisterProc.ExitCode -eq 0) {
+            if ($AwaitDomain) {
+                Write-Log "Registration successfully queued for exeuction after domain join"
+            } else {
+                Write-Log "Registration completed successfully"
+            }
+        } else {
+            throw $KasmRegisterProc.ExitCode
+        }
     } catch {
         $message = "Failed to register agent: $_"
         
