@@ -45,9 +45,6 @@ deploy:
   image: 
     name: amazon/aws-cli
     entrypoint: [""]
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "develop"
-    - if: $CI_COMMIT_REF_NAME =~ /^release\/.*$/
   script:
     - S3_DOC_BUCKET=kasmweb-build-artifacts
     - |
