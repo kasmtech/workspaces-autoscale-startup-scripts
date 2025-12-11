@@ -133,21 +133,13 @@ Action=org.freedesktop.color-manager.*
 ResultActive=yes
 EOF'
   sleep 1 
+
   systemctl restart xrdp
 }}
 
 install_kds () {{
 
-  if dpkg -l | grep -q kasm-desktop-service; then
-    echo "Existing kasm-desktop-service installation detected. Purging..."
-    systemctl stop kasm-desktop.service || true
-    apt-get purge -y kasm-desktop-service || true
-    apt-get autoremove -y || true
-    rm -rf /opt/kasm-desktop-service || true
-  fi
-
-  # this is temprorary need to change it to latest 
-  KDS_DEB_URL="ChangeMe"
+  KDS_DEB_URL=""
 
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
@@ -155,11 +147,12 @@ install_kds () {{
   SKIP_KASM_REGISTRATION=1 apt-get install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
-  #infered from windows Autoscale Tokens
+  sleep 2 
+
   KASM_HOST_NAME="{upstream_auth_address}"
   REG_TOKEN="{checkin_jwt}"
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
-  API_PORT= 443
+  API_PORT=443
 
   bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
     --register \
@@ -167,6 +160,8 @@ install_kds () {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN"
+
+  sleep 2 
 
   systemctl enable kasm-desktop.service
   systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
