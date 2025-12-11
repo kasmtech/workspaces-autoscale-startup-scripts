@@ -133,6 +133,102 @@ Action=org.freedesktop.color-manager.*
 ResultActive=yes
 EOF'
   sleep 1 
+  systemctl restart xrdp
+}}
+
+install_kds () {{
+
+  if dpkg -l | grep -q kasm-desktop-service; then
+    echo "Existing kasm-desktop-service installation detected. Purging..."
+    systemctl stop kasm-desktop.service || true
+    apt-get purge -y kasm-desktop-service || true
+    apt-get autoremove -y || true
+    rm -rf /opt/kasm-desktop-service || true
+  fi
+
+  # this is temprorary need to change it to latest 
+  KDS_DEB_URL="ChangeMe"
+
+  cd /tmp
+  wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
+
+  SKIP_KASM_REGISTRATION=1 apt-get install -y ./kasm-desktop-service.deb
+  rm -f ./kasm-desktop-service.deb
+
+  #infered from windows Autoscale Tokens
+  KASM_HOST_NAME="{upstream_auth_address}"
+  REG_TOKEN="{checkin_jwt}"
+  API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
+  API_PORT= 443
+
+  bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
+    --register \
+    --no-gui \
+    --api-host="$API_HOST" \
+    --api-port="$API_PORT" \
+    --token="$REG_TOKEN"
+
+  systemctl enable kasm-desktop.service
+  systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
+}}
+
+install_xrdp () {{
+  apt-get install -y xrdp xfce4 xfce4-goodies dbus-x11 xorg x11-xserver-utils
+
+  adduser xrdp ssl-cert || true
+  systemctl enable xrdp
+  systemctl restart xrdp
+
+  sleep 1
+
+  bash -c 'echo "xfce4-session" > /etc/skel/.xsession'
+  bash -c 'echo "xfce4-session" > /etc/skel/.Xsession'
+  chmod 644 /etc/skel/.xsession /etc/skel/.Xsession
+
+  bash -c 'cat >/etc/xrdp/startwm.sh <<EOF
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset WAYLAND_DISPLAY
+export XDG_SESSION_TYPE=x11
+export \$(dbus-launch)
+xfce4-session
+EOF'
+  chmod +x /etc/xrdp/startwm.sh
+  
+  sleep 1 
+  
+  mkdir -p /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+  bash -c 'cat >/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="blank-delay" type="int" value="0"/>
+  <property name="lock-delay" type="int" value="0"/>
+  <property name="idle-delay" type="int" value="0"/>
+</channel>
+EOF'
+
+  bash -c 'cat >/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-power-manager" version="1.0">
+  <property name="xfce4-power-manager" type="empty">
+    <property name="power-button-action" type="empty"/>
+    <property name="show-tray-icon" type="bool" value="false"/>
+    <property name="dpms-enabled" type="bool" value="false"/>
+  </property>
+</channel>
+EOF'
+
+  mkdir -p /etc/polkit-1/localauthority/50-local.d
+  bash -c 'cat >/etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla <<EOF
+[Allow Colord All Users]
+Identity=unix-user:*
+Action=org.freedesktop.color-manager.*
+ResultActive=yes
+EOF'
+  sleep 1 
 
   systemctl restart xrdp
 }}
