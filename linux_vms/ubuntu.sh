@@ -144,6 +144,11 @@ install_kds () {{
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
 
+# Uncomment the command below if using iptables.
+# Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
+
+# configure_iptables
+
   SKIP_KASM_REGISTRATION=1 apt-get install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
