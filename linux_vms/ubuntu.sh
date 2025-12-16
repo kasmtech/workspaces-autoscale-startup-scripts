@@ -139,7 +139,11 @@ EOF'
 
 install_kds () {{
 
-  KDS_DEB_URL=""
+  #please select based on your VM aarch
+  # # amd 
+  # KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb"
+  
+  KDS_DEB_URL = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb"
 
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
