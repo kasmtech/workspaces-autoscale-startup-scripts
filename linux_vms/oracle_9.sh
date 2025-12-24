@@ -10,7 +10,7 @@ mkdir -p /var/log
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-configure_iptables() {
+configure_iptables() {{
   echo "[INFO] Adding firewall rules for RDP (3389) and Kasm (4902)"
 
   if systemctl is-active --quiet firewalld; then
@@ -21,14 +21,14 @@ configure_iptables() {
     iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
     iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
   fi
-}
+}}
 
-# this is for RHEL based OS
+# this is for RHEL based OS.
 dnf -y update
 dnf -y install epel-release
 dnf config-manager --set-enabled crb || true
 
-install_xfce() {
+install_xfce() {{
   dnf groupinstall -y "Xfce"
   dnf install -y \
     supervisor \
@@ -38,22 +38,28 @@ install_xfce() {
     dbus-x11 \
     xorg-x11-xauth \
     xorg-x11-server-Xorg
-}
+}}
 
 # Optional:  screenshot tooling
-install_screenshot_tools() {
+install_screenshot_tools() {{
   if dnf install -y gnome-screenshot; then
     echo "[INFO] gnome-screenshot installed successfully"
   else
     echo "[WARN] gnome-screenshot not available; screenshot API may be limited on this system"
   fi
-}
+}}
 
-install_kasmvnc() {
+install_kasmvnc() {{
   cd /tmp
 
   KASM_VNC_PATH=/usr/share/kasmvnc
-  BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.3.3/kasmvncserver_el9_1.3.3_x86_64.rpm"
+  ARCH=$(uname -m)
+  if [[ "$ARCH" == "x86_64" ]]; then
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_oracle_9_1.4.0_x86_64.rpm"
+  else
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_oracle_9_1.4.0_aarch64.rpm"
+  fi
+
   KASM_VNC_PASSWD="{connection_password}"
   KASM_VNC_USER="{connection_username}"
 
@@ -83,13 +89,25 @@ install_kasmvnc() {
   usermod -aG ssl-cert $KASM_VNC_USER || true
 
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}
+}}
 
-install_xrdp() {
+install_tigervnc (){{
+  dnf install -y tigervnc-server
+  mkdir /home/opc/.vnc
+  echo "password123abc" | vncpasswd -f > /home/opc/.vnc/passwd
+  echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/opc/.vnc/xstartup
+  chown -R opc:opc /home/opc/.vnc
+  chmod 0600 /home/opc/.vnc/passwd
+  su -l -c 'vncserver -localhost no' opc
+}}
+
+install_xrdp() {{
   dnf install -y xrdp
 
   systemctl enable xrdp
   systemctl restart xrdp
+
+  sleep 1 
 
   echo "xfce4-session" > /etc/skel/.xsession
   echo "xfce4-session" > /etc/skel/.Xsession
@@ -103,6 +121,8 @@ exec xfce4-session
 EOF
 
   chmod +x /etc/xrdp/startwm.sh
+
+  sleep 1
 
   mkdir -p /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
 
@@ -140,10 +160,9 @@ EOF'
 
   sleep 1
   systemctl restart xrdp
-}
+}}
 
-install_kds() {
-  cd /tmp
+install_kds() {{
 
   ARCH=$(uname -m)
   if [ "$ARCH" = "x86_64" ]; then
@@ -152,13 +171,21 @@ install_kds() {
     KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0+develop_aarch64.rpm"
   fi
 
+  cd /tmp
   wget "$KDS_RPM_URL" -O kasm-desktop-service.rpm
+
+# Uncomment the command below if using iptables.
+# Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
+
+# configure_iptables
+  
   SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
 
+  sleep 2 
+
   KASM_HOST_NAME="{upstream_auth_address}"
   REG_TOKEN="{checkin_jwt}"
-
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d':' -f1)
   API_PORT=443
 
@@ -169,15 +196,20 @@ install_kds() {
     --api-port="$API_PORT" \
     --token="$REG_TOKEN"
 
+  sleep 2 
+
   systemctl enable kasm-desktop.service
   systemctl restart kasm-desktop.service
-}
+}}
 
+sleep 10  
 install_xfce
 install_screenshot_tools
 
+
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
+  #install_tigervnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
