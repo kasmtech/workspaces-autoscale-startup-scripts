@@ -56,7 +56,7 @@ Now run sysprep on the VM and shut it down, use the Azure portal to create a new
 
 Now update your Kasm deployment's VM Provider configuration in your Server Pool, to point to the newly created image. When a VM created by Kasm is created, it will execute the startup script on boot. The startup script will remove the scheduled task, execute the PowerShell script injected by Kasm, and then delete that powershell script. 
 
-The example [azure_join_ad.txt](./azure_join_ad.txt) joins the system to the domain and reboots it. This assumes that the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) is set to auto join VMs to the domain and that LDAP SSO is configured.
+The example [default_join_ad.txt](/default_join_ad.txt) joins the system to the domain and reboots it. This assumes that the [auto-scale configuration](https://www.kasmweb.com/docs/latest/guide/compute/pools.html#autoscale-configurations) is set to auto join VMs to the domain and that LDAP SSO is configured.
 
 See our Windows Server video, which walks through auto AD joining and LDAP SSO.
 <iframe src='https://www.youtube.com/embed/_WCee4-E4vA' frameborder='0' allowfullscreen></iframe>
