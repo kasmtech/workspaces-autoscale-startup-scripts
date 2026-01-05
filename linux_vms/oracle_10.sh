@@ -177,7 +177,7 @@ install_kds() {{
 # Uncomment the command below if using iptables.
 # Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
 
-# configure_iptables
+  configure_iptables
   
   SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
@@ -205,7 +205,6 @@ install_kds() {{
 sleep 10  
 install_xfce
 install_screenshot_tools
-
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
