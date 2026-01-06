@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex
 
-ENABLE_KASMVNC=1
+ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
 
@@ -10,7 +10,7 @@ mkdir -p /var/log
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-configure_iptables() {{
+configure_iptables() {
   echo "[INFO] Adding firewall rules for RDP (3389) and Kasm (4902)"
 
   if systemctl is-active --quiet firewalld; then
@@ -21,14 +21,14 @@ configure_iptables() {{
     iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
     iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
   fi
-}}
+}
 
 # this is for RHEL based OS.
 dnf -y update
-dnf -y install epel-release
-dnf config-manager --set-enabled crb || true
+dnf install -y oracle-epel-release-el9
+dnf config-manager --enable ol9_developer_EPEL
 
-install_xfce() {{
+install_xfce() {
   dnf groupinstall -y "Xfce"
   dnf install -y \
     supervisor \
@@ -38,18 +38,18 @@ install_xfce() {{
     dbus-x11 \
     xorg-x11-xauth \
     xorg-x11-server-Xorg
-}}
+}
 
 # Optional:  screenshot tooling
-install_screenshot_tools() {{
+install_screenshot_tools() {
   if dnf install -y gnome-screenshot; then
     echo "[INFO] gnome-screenshot installed successfully"
   else
     echo "[WARN] gnome-screenshot not available; screenshot API may be limited on this system"
   fi
-}}
+}
 
-install_kasmvnc() {{
+install_kasmvnc() {
   cd /tmp
 
   KASM_VNC_PATH=/usr/share/kasmvnc
@@ -89,9 +89,9 @@ install_kasmvnc() {{
   usermod -aG ssl-cert $KASM_VNC_USER || true
 
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}}
+}
 
-install_tigervnc (){{
+install_tigervnc (){
   dnf install -y tigervnc-server
   mkdir /home/opc/.vnc
   echo "password123abc" | vncpasswd -f > /home/opc/.vnc/passwd
@@ -99,9 +99,9 @@ install_tigervnc (){{
   chown -R opc:opc /home/opc/.vnc
   chmod 0600 /home/opc/.vnc/passwd
   su -l -c 'vncserver -localhost no' opc
-}}
+}
 
-install_xrdp() {{
+install_xrdp() {
   dnf install -y xrdp
 
   systemctl enable xrdp
@@ -160,15 +160,15 @@ EOF'
 
   sleep 1
   systemctl restart xrdp
-}}
+}
 
-install_kds() {{
+install_kds() {
 
   ARCH=$(uname -m)
   if [ "$ARCH" = "x86_64" ]; then
-    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0+develop_x86_64.rpm"
+    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.rpm"
   else
-    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0+develop_aarch64.rpm"
+    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.rpm"
   fi
 
   cd /tmp
@@ -200,9 +200,9 @@ install_kds() {{
 
   systemctl enable kasm-desktop.service
   systemctl restart kasm-desktop.service
-}}
+}
 
-sleep 10  
+sleep 5
 install_xfce
 install_screenshot_tools
 

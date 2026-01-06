@@ -148,9 +148,9 @@ install_kds () {{
 
   ARCH=$(uname -m)
   if [[ "$ARCH" == "x86_64" ]]; then
-    KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0+develop_x86_64.deb"
+    KDS_DEB_URL = git "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb" 
   else
-    KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0+develop_aarch64.deb"
+    KDS_DEB_URL = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb"
   fi
 
   cd /tmp
