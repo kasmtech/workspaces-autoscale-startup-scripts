@@ -1,6 +1,6 @@
 # Windows Autoscale Scripts for Kasm Workspaces
 
-This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasm.com/docs/guide/windows/auto_scaled_servers.html) functionality for [Kasm Workspaces](https://kasmweb.com/).
+This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasm.com/docs/guide/windows/auto_scaled_servers.html) functionality for [Kasm Workspaces](https://kasm.com/).
 
 ## Features
 - Kasm Windows Desktop Service - Install and register the Kasm Desktop Service
@@ -14,7 +14,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 
 | Provider                                                                                                               | ![Windows 10](https://custom-icon-badges.demolab.com/badge/Windows_10-0078D6?logo=windows11&logoColor=white) | ![Windows 11](https://custom-icon-badges.demolab.com/badge/Windows_11-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2022](https://custom-icon-badges.demolab.com/badge/Windows_Server_2022-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2025](https://custom-icon-badges.demolab.com/badge/Windows_Server_2025-0078D6?logo=windows11&logoColor=white) |
 |------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------:|
-| ![AWS](https://custom-icon-badges.demolab.com/badge/AWS-%23FF9900.svg?logo=aws&logoColor=white)                        |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
+| ![AWS](https://custom-icon-badges.demolab.com/badge/AWS-%23FF9900.svg?logo=aws&logoColor=white)                        |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                    ![Verified](https://img.shields.io/badge/Verified-green)                                    |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
 | ![Microsoft Azure](https://custom-icon-badges.demolab.com/badge/Microsoft%20Azure-0089D6?logo=msazure&logoColor=white) |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
 | ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-%234285F4.svg?logo=google-cloud&logoColor=white)           |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                ![N/A](https://img.shields.io/badge/N/A-gray)                                 |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
 | ![Harvester](https://img.shields.io/badge/-Harvester-00a383)                                                           |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                                    ![Verified](https://img.shields.io/badge/Verified-green)                                    |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
@@ -38,10 +38,11 @@ Special placeholder tokens (ex: `{some_variable}`) can be used in the Startup Sc
 
 #### Example Startup Script
 ```powershell
-#ps1_sysnative
+<powershell>
 
+$Version = "1.18.0"
 $StartupScriptArchive = "kasm-windows-startup.zip"
-$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/1.18.0/$StartupScriptArchive"
+$StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/$Version/$StartupScriptArchive"
 $WorkingDirectory = "$($Env:Temp)"
 $InitScript = "$WorkingDirectory\Init-VM-Task.ps1"
 $ProgressPreference = "SilentlyContinue" # improve Invoke-Webrequest performance
@@ -59,21 +60,14 @@ Write-Output "Extracting archive $WorkingDirectory\$StartupScriptArchive"
 Expand-Archive -Path "$WorkingDirectory\$StartupScriptArchive" -DestinationPath $WorkingDirectory
 
 
-### INSERT EXECUTION COMMAND HERE ###
-```
-
-#### Example Execution Command
-```powershell
+### Modify the following arguments to enable desired features ###
 Write-Output "Executing $InitScript"
 & $InitScript `
   -KasmHostname "{upstream_auth_address}" `
   -RegistrationToken "{checkin_jwt}" `
-  -ServerId "{server_id}" `
-  -DomainName "{domain}" `
-  -ActiveDirectoryCredential "{ad_join_credential}" `
-  -DnsServers "10.0.0.52" `
-  -ServerName "{server_hostname}" `
-  -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles"
+  -ServerId "{server_id}"
+
+</powershell>
 ```
 
 ### Kasm Windows Desktop Service
