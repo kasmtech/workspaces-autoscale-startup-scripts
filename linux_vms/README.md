@@ -14,6 +14,9 @@ Kasm replaces variables in the script that are wrapped in curly brackets, such a
 | upstream_auth_address      | The resolvable hostname, IP, or FQDN of the KASM API server. The token `{upstream_auth_address}` will be replaced with the value of "Zone" > "Upstream Auth Address" from the autoscale configuration's zone. |
 | checkin_jwt        | The registration token (JWT) created by Kasm for the newly created server. The token `{checkin_jwt}` will be replaced with a Kasm-generated registration token that is valid for 4 hours. |                                                                                                                                                                
 
+**NOTE: Important (Linux difference vs Windows)**
+On Linux, Kasm does not provide an AD join username variable. Only the password ({ad_join_credential}) is provided. The join username must be defined in the script (typically Administrator or a delegated join account).
+
 ### Escaping Brackets
 If your script uses curly brackets, aside from Kasm variables, you must escape them by doubling them up. Here is an example.
 
