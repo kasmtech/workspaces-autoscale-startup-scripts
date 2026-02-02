@@ -6,6 +6,19 @@ ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
 ENABLE_IPTABLES=1
+ENABLE_AD_JOIN=1
+
+AD_DOMAIN="{domain}"
+AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
+AD_JOIN_USER=""                             # must be provided separately
+
+DNS_SERVERS="{dns_servers}"     # optional
+SERVER_NAME="{server_hostname}" # optional
+
+if [[ -z "$AD_JOIN_USER" ]]; then
+  echo "[ERROR] AD join username missing. Set AD_JOIN_USER in the script."
+  exit 1
+fi
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -211,6 +224,89 @@ install_kds() {{
   systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
 }}
 
+install_ad_dependencies() {{
+  echo "[INFO] Installing AD dependencies"
+  apt-get install -y \
+    realmd sssd sssd-tools adcli \
+    krb5-user oddjob oddjob-mkhomedir \
+    samba-common-bin dnsutils
+}}
+
+configure_dns() {{
+  if [ -z "$DNS_SERVERS" ] || [[ "$DNS_SERVERS" == "{dns_servers}" ]]; then
+    echo "[INFO] DNS servers not provided, skipping DNS config"
+    return
+  fi
+
+  echo "[INFO] Configuring DNS: $DNS_SERVERS"
+
+  sed -i 's/^#DNS=.*/DNS='"${DNS_SERVERS// /,}"'/' /etc/systemd/resolved.conf
+  sed -i 's/^#Domains=.*/Domains=~./' /etc/systemd/resolved.conf
+
+  systemctl restart systemd-resolved
+}}       
+
+test_domain_resolution() {{
+  echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
+
+  if [ -z "$(dig +short "$AD_DOMAIN" | head -n1)" ]; then
+    echo "[ERROR] Domain $AD_DOMAIN not resolvable"
+    exit 1
+  fi
+
+  realm discover "$AD_DOMAIN" >/dev/null || {{
+    echo "[ERROR] realm discovery failed for $AD_DOMAIN"
+    exit 1
+  }}
+
+  echo "[INFO] Domain resolution successful"
+}}
+
+set_hostname() {{
+  if [ -n "$SERVER_NAME" ]; then
+    echo "[INFO] Setting hostname to $SERVER_NAME"
+    hostnamectl set-hostname "$SERVER_NAME"
+  fi
+}}
+
+join_domain() {{
+  echo "[INFO] Joining domain $AD_DOMAIN"
+  echo "$AD_JOIN_PASSWORD" | realm join "$AD_DOMAIN" \
+    --user="$AD_JOIN_USER" \
+    --membership-software=adcli \
+    --install=/ || {{
+      echo "[ERROR] Domain join failed"
+      exit 1
+    }}
+  echo "[INFO] Domain join successful"
+}}
+
+enable_homedir_creation() {{
+  pam-auth-update --enable mkhomedir || true
+  systemctl enable sssd
+  systemctl restart sssd
+}}
+
+install_ad_join()
+{{
+
+  if realm list | grep -qi "$AD_DOMAIN"; then
+    echo "[INFO] Already joined to $AD_DOMAIN, skipping AD join"
+    return
+  fi
+
+  install_ad_dependencies
+  configure_dns
+  set_hostname
+  test_domain_resolution
+  join_domain
+  enable_homedir_creation
+
+  echo "[INFO] AD Join complete — rebooting"
+  sleep 3 
+  reboot
+}}
+
 apt_wait
 sleep 10
 apt_wait
@@ -222,6 +318,11 @@ if [ "$ENABLE_IPTABLES" -eq 1 ]; then
 fi
 
 install_xfce
+
+
+if [ "$ENABLE_AD_JOIN" -eq 1 ]; then
+  install_ad_join
+fi
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
