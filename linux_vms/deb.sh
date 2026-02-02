@@ -10,15 +10,11 @@ ENABLE_AD_JOIN=1
 
 AD_DOMAIN="{domain}"
 AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
-AD_JOIN_USER=""                             # must be provided separately
+AD_JOIN_USER="Administrator"                # must be modified separately as per user as the delegated join account 
 
+# DNS_SERVERS intentionally unused – AD DNS is discovered dynamically
 DNS_SERVERS="{dns_servers}"     # optional
 SERVER_NAME="{server_hostname}" # optional
-
-if [[ -z "$AD_JOIN_USER" ]]; then
-  echo "[ERROR] AD join username missing. Set AD_JOIN_USER in the script."
-  exit 1
-fi
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -232,19 +228,37 @@ install_ad_dependencies() {{
     samba-common-bin dnsutils
 }}
 
-configure_dns() {{
-  if [ -z "$DNS_SERVERS" ] || [[ "$DNS_SERVERS" == "{dns_servers}" ]]; then
-    echo "[INFO] DNS servers not provided, skipping DNS config"
-    return
+cleanup() {{
+  restore_dns || true
+}}
+trap cleanup EXIT
+
+backup_dns() {{
+  if [ -e /etc/resolv.conf ]; then
+    cp -L /etc/resolv.conf /etc/resolv.conf.pre-ad
   fi
+}}
 
-  echo "[INFO] Configuring DNS: $DNS_SERVERS"
+configure_dns_for_ad() {{
+  echo "[INFO] Temporarily overriding DNS for AD join"
 
-  sed -i 's/^#DNS=.*/DNS='"${DNS_SERVERS// /,}"'/' /etc/systemd/resolved.conf
-  sed -i 's/^#Domains=.*/Domains=~./' /etc/systemd/resolved.conf
+  systemctl disable systemd-resolved --now || true
+  rm -f /etc/resolv.conf
 
-  systemctl restart systemd-resolved
-}}       
+  cat >/etc/resolv.conf <<EOF
+nameserver $DC_IP
+search $AD_DOMAIN
+EOF
+}}
+
+restore_dns() {{
+  if [ -f /etc/resolv.conf.pre-ad ]; then
+    echo "[INFO] Restoring original DNS configuration"
+    rm -f /etc/resolv.conf
+    mv /etc/resolv.conf.pre-ad /etc/resolv.conf
+    systemctl enable systemd-resolved --now || true
+  fi
+}}
 
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
@@ -268,6 +282,28 @@ set_hostname() {{
     hostnamectl set-hostname "$SERVER_NAME"
   fi
 }}
+
+discover_dc() {{
+  echo "[INFO] Discovering DC via DNS SRV"
+  DC_HOST=$(dig +short _kerberos._tcp."$AD_DOMAIN" SRV | awk '{print $4}' | head -n1 | sed 's/\.$//')
+  if [ -z "$DC_HOST" ]; then
+    echo "[ERROR] Unable to discover DC hostname"
+    exit 1
+  fi
+  DC_IP=$(getent hosts "$DC_HOST" | awk '{print $1}' | head -n1)
+  if [ -z "$DC_IP" ]; then
+    echo "[ERROR] Unable to resolve DC IP"
+    exit 1
+  fi
+  echo "[INFO] Using DC $DC_HOST ($DC_IP)"
+}}
+
+sync_time() {{
+  echo "[INFO] Syncing time with DC"
+  apt-get install -y ntpdate || true
+  ntpdate "$DC_IP" || true
+}}
+
 
 join_domain() {{
   echo "[INFO] Joining domain $AD_DOMAIN"
@@ -294,12 +330,15 @@ install_ad_join()
     echo "[INFO] Already joined to $AD_DOMAIN, skipping AD join"
     return
   fi
-
   install_ad_dependencies
-  configure_dns
   set_hostname
+  discover_dc
+  backup_dns
+  configure_dns_for_ad
+  sync_time
   test_domain_resolution
   join_domain
+  restore_dns
   enable_homedir_creation
 
   echo "[INFO] AD Join complete — rebooting"
@@ -319,17 +358,16 @@ fi
 
 install_xfce
 
-
-if [ "$ENABLE_AD_JOIN" -eq 1 ]; then
-  install_ad_join
-fi
-
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
   install_xrdp
+fi
+
+if [ "$ENABLE_AD_JOIN" -eq 1 ]; then
+  install_ad_join
 fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
