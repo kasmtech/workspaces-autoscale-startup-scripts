@@ -14,10 +14,6 @@ AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
 
 AD_JOIN_USER="change_me"                # must be modified separately as per user as the delegated join account 
 
-# DNS_SERVERS intentionally unused – AD DNS is discovered dynamically
-DNS_SERVERS="change_me" # optional
-SERVER_NAME="change_me" # optional
-
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
 touch "$LOG_FILE"
@@ -278,13 +274,6 @@ test_domain_resolution() {{
   echo "[INFO] Domain resolution successful"
 }}
 
-set_hostname() {{
-  if [ -n "$SERVER_NAME" ]; then
-    echo "[INFO] Setting hostname to $SERVER_NAME"
-    hostnamectl set-hostname "$SERVER_NAME"
-  fi
-}}
-
 discover_dc() {{
   echo "[INFO] Discovering DC via DNS SRV"
   DC_HOST=$(dig +short _kerberos._tcp."$AD_DOMAIN" SRV | awk '{print $4}' | head -n1 | sed 's/\.$//')
@@ -333,7 +322,6 @@ install_ad_join()
     return
   fi
   install_ad_dependencies
-  set_hostname
   discover_dc
   backup_dns
   configure_dns_for_ad
