@@ -8,13 +8,15 @@ ENABLE_KDS=1
 ENABLE_IPTABLES=1
 ENABLE_AD_JOIN=1
 
+# provided by Kasm workspace
 AD_DOMAIN="{domain}"
 AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
-AD_JOIN_USER="Administrator"                # must be modified separately as per user as the delegated join account 
+
+AD_JOIN_USER="change_me"                # must be modified separately as per user as the delegated join account 
 
 # DNS_SERVERS intentionally unused – AD DNS is discovered dynamically
-DNS_SERVERS="{dns_servers}"     # optional
-SERVER_NAME="{server_hostname}" # optional
+DNS_SERVERS="change_me" # optional
+SERVER_NAME="change_me" # optional
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
