@@ -306,13 +306,12 @@ sync_time() {{
   ntpdate "$DC_IP" || true
 }}
 
-
 join_domain() {{
   echo "[INFO] Joining domain $AD_DOMAIN"
   echo "$AD_JOIN_PASSWORD" | realm join "$AD_DOMAIN" \
     --user="$AD_JOIN_USER" \
     --membership-software=adcli \
-    --install=/ || {{
+    --unattended || {{
       echo "[ERROR] Domain join failed"
       exit 1
     }}
