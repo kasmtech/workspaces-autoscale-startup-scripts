@@ -11,8 +11,9 @@ ENABLE_AD_JOIN=1
 # provided by Kasm workspace
 AD_DOMAIN="{domain}"
 AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
-AD_JOIN_USER="change_me"                # must be modified separately as per user as the delegated join account 
-
+# NOTE: On Linux, Kasm only provides {ad_join_credential} (password only, no username variable).
+# Either set AD_JOIN_USER to a delegated join account, or switch to one-time-password method (see below).
+AD_JOIN_USER="Administrator"            # REQUIRED: change to your delegated join account
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -184,12 +185,12 @@ EOF'
 
 install_kds() {{
 
-  ARCH=$(uname -m)
-  if [[ "$ARCH" == "x86_64" ]]; then
-    KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb"
-  else
-    KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb"
-  fi
+  ARCH=$(dpkg --print-architecture)
+  case "$ARCH" in
+    amd64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb" ;;
+    arm64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb" ;;
+    *) echo "[ERROR] Unsupported architecture: $ARCH" >&2; exit 1 ;;
+  esac
 
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
@@ -275,6 +276,7 @@ test_domain_resolution() {{
 }}
 
 discover_dc() {{
+  # Sets DC_HOST and DC_IP as globals used by configure_dns_for_ad and sync_time
   echo "[INFO] Discovering DC via DNS SRV"
   DC_HOST=$(dig +short _kerberos._tcp."$AD_DOMAIN" SRV | awk '{print $4}' | head -n1 | sed 's/\.$//')
   if [ -z "$DC_HOST" ]; then
@@ -296,7 +298,14 @@ sync_time() {{
 }}
 
 join_domain() {{
-  echo "[INFO] Joining domain $AD_DOMAIN"
+  # Option A (current): username + password join — requires AD_JOIN_USER to be set above
+  # Option B (recommended if using Kasm one-time-password): uncomment below and remove Option A
+
+  # realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
+  #   echo "[ERROR] Domain join failed"
+  #   exit 1
+  # }}
+
   echo "$AD_JOIN_PASSWORD" | realm join "$AD_DOMAIN" \
     --user="$AD_JOIN_USER" \
     --membership-software=adcli \
@@ -304,10 +313,19 @@ join_domain() {{
       echo "[ERROR] Domain join failed"
       exit 1
     }}
+
   echo "[INFO] Domain join successful"
 }}
 
 enable_homedir_creation() {{
+  echo "[INFO] Configuring sssd for xrdp GPO compatibility"
+
+  # Required for domain users to authenticate via xrdp when AD GPOs are enforced
+  # See: https://wiki.ubuntu.com/Enterprise/Authentication/sssd
+  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
+    echo "ad_gpo_map_remote_interactive = +xrdp-sesman" >> /etc/sssd/sssd.conf
+  fi
+
   pam-auth-update --enable mkhomedir || true
   systemctl enable sssd
   systemctl restart sssd
@@ -321,7 +339,7 @@ install_ad_join()
     return
   fi
   install_ad_dependencies
-  discover_dc
+  discover_dc  # uses original DNS to find DC_IP
   backup_dns
   configure_dns_for_ad
   sync_time
@@ -330,9 +348,7 @@ install_ad_join()
   restore_dns
   enable_homedir_creation
 
-  echo "[INFO] AD Join complete — rebooting"
-  sleep 3 
-  reboot
+  echo "[INFO] AD Join complete"
 }}
 
 apt_wait
