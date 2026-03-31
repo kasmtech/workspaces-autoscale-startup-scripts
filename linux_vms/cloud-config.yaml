@@ -1,0 +1,47 @@
+#cloud-config
+package_update: true
+packages:
+  - qemu-guest-agent
+  - sudo
+users:
+  - name: kasm-admin
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - {ssh_key}
+
+write_files:
+  - path: /usr/local/bin/server-check-in.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      curl -k -X POST -H "Content-Type: application/json" -d '{{"status": "running", "status_message": "Initialization Complete", "status_progress": "100"}}' https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}
+  - path: /etc/systemd/system/server-checkin.service
+    content: |
+      [Unit]
+      Description=Kasm Server Check-in
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/server-check-in.sh
+  - path: /etc/systemd/system/server-checkin.timer
+    content: |
+      [Unit]
+      Description=Run Kasm Server Check-in every 30 seconds
+
+      [Timer]
+      OnBootSec=20
+      OnUnitActiveSec=30s
+
+      [Install]
+      WantedBy=timers.target
+runcmd:
+  - - systemctl
+    - enable
+    - --now
+    - qemu-guest-agent.service
+  - sleep 15
+  - systemctl daemon-reload
+  - systemctl enable server-checkin.timer
+  - systemctl start server-checkin.timer
