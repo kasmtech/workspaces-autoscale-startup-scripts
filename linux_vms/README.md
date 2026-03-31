@@ -24,3 +24,6 @@ echo "${{VARIABLE}}"
 The example script [ubuntu.sh](./ubuntu.sh) installs KasmVNC on the Ubuntu VM and configures a KasmVNC user using the configured username and password in the [auto-scale configuration's](https://docs.kasm.com/docs/guide/compute/pools.html#autoscale-configurations) Connection User and Connection Password fields. Kasm Workspaces can also work with a traditional VNC server. The example ubuntu.sh script also includes a function for installing, configuring, and starting tigervnc on the default port 5901.
 
 Additional KasmVNC installers for other distros can be found on the public [KasmVNC github repository](https://github.com/kasmtech/KasmVNC/releases)
+
+### cloud-config.yaml
+This is a default cloud init configuation that can be used as a startup script for Ubuntu servers running on Harvester/KubeVirt platforms.
