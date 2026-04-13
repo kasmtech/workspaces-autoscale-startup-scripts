@@ -20,7 +20,6 @@ configure_iptables() {
     firewall-cmd --add-port=4902/tcp --permanent
     firewall-cmd --reload
   else
-    # Install iptables-services so rules survive reboot
     dnf install -y iptables-services
     systemctl enable iptables
     systemctl start iptables
@@ -33,10 +32,11 @@ configure_iptables() {
   fi
 }
 
-# this is for RHEL based OS.
-dnf -y update
-dnf install -y oracle-epel-release-el9
-dnf config-manager --enable ol9_developer_EPEL
+# this is for RHEL based OS, where xrdp is not available directly but required EPEL, please uncomment the below
+
+# dnf -y update
+# dnf install -y oracle-epel-release-el9
+# dnf config-manager --enable ol9_developer_EPEL
 
 install_xfce() {
   dnf groupinstall -y "Xfce"
@@ -194,7 +194,7 @@ install_kds() {
 # Uncomment the command below if using iptables.
 # Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
 
-  configure_iptables
+ # configure_iptables
   
   SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm

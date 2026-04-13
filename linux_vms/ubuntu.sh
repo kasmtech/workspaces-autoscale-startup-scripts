@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -ex
+set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # Change these flags to only install the desired services
@@ -9,6 +9,8 @@ ENABLE_KDS=1
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
+touch "$LOG_FILE"
+chmod 0600 "$LOG_FILE"
 echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -55,8 +57,11 @@ install_kasmvnc (){{
     BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_jammy_1.4.0_arm64.deb"
   fi
  
-  KASM_VNC_PASSWD={connection_password}
-  KASM_VNC_USER={connection_username}
+  # Disable xtrace for the duration of secret handling
+  set +x
+  KASM_VNC_PASSWD="{connection_password}"
+  KASM_VNC_USER="{connection_username}"
+  set -x
   wget "$BUILD_URL" -O kasmvncserver.deb
   apt-get install -y gettext ssl-cert libxfont2
   apt-get install -y /tmp/kasmvncserver.deb
@@ -67,7 +72,9 @@ install_kasmvnc (){{
   chown -R 0:0 $KASM_VNC_PATH
   chmod -R og-w $KASM_VNC_PATH
   chown -R 1000:0 $KASM_VNC_PATH/www/Downloads
+  set +x
   echo -e "$KASM_VNC_PASSWD\n$KASM_VNC_PASSWD\n" | kasmvncpasswd -u $KASM_VNC_USER -w "/home/$KASM_VNC_USER/.kasmpasswd"
+  set -x
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
   addgroup $KASM_VNC_USER ssl-cert
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
@@ -76,7 +83,9 @@ install_kasmvnc (){{
 install_tigervnc (){{
   apt-get install -y tigervnc-standalone-server
   mkdir /home/ubuntu/.vnc
-  echo "password123abc" | vncpasswd -f > /home/ubuntu/.vnc/passwd
+  set +x
+  echo "{connection_password}" | vncpasswd -f > /home/ubuntu/.vnc/passwd
+  set -x
   echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/ubuntu/.vnc/xstartup
   chown -R ubuntu:ubuntu /home/ubuntu/.vnc
   chmod 0600 /home/ubuntu/.vnc/passwd
@@ -166,6 +175,7 @@ install_kds () {{
 
   sleep 2 
 
+  set +x
   KASM_HOST_NAME="{upstream_auth_address}"
   REG_TOKEN="{checkin_jwt}"
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
@@ -177,6 +187,7 @@ install_kds () {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN"
+  set -x
 
   sleep 2 
 
