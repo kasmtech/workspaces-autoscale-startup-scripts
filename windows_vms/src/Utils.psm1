@@ -136,8 +136,8 @@ Function Send-KasmLog {
         # Send the POST request
         Invoke-RestMethod -Uri $Url -Method POST -Body $jsonBody -Headers $headers
     } catch {
-        Write-Error "Failed to send request: $($_.Exception.Message)"
-        #todo: write this error to log file
+        $ErrorMsg = "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $($_.Exception.Message)"
+        Out-File -InputObject $ErrorMsg -FilePath $KasmLogFile -Append -Encoding "utf8"
     }
 }
 
