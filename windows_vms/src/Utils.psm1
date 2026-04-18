@@ -6,7 +6,7 @@ $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 $script:ModuleToken = $null
 $script:ModuleKasmHostname = $null
 $script:ModuleServerName = $null
-$script:ModuleSkipCertCheck = $false
+$script:ModuleSkipCertCheck = $true
 
 Function Set-LoggingProperties {
     param(
@@ -20,7 +20,7 @@ Function Set-LoggingProperties {
         [string]$ServerName,
 
         [Parameter(Mandatory=$false)]
-        [bool]$SkipCertificateCheck = $false
+        [bool]$SkipCertificateCheck = $true
     )
 
     # Store values in script scope so it’s usable for the entire session
