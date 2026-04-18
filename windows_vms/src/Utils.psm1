@@ -28,7 +28,6 @@ Function Set-LoggingProperties {
     $script:ModuleToken = $Token
     $script:ModuleSkipCertCheck = $SkipCertificateCheck
 
-    # todo: consider making this domain + ServerName so that "host" is consistent with desktop service loging in Kasm Dashboard
     if ($null -eq $ServerName -or $ServerName -eq "") {
         # Set ServerName to computer name if not set
         $script:ModuleServerName = $env:COMPUTERNAME
@@ -116,7 +115,6 @@ Function Send-KasmLog {
         "Debug"       = "DEBUG"
     }
 
-    #todo: this endpoint only exists in 1.18.0. Try to fall back to /api/kasm_session_log for 1.17.0 and earlier (at least 1.13.0)
     $Url = "https://$ModuleKasmHostname/api/component_log"
 
     try {
