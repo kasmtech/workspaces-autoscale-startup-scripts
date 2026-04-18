@@ -23,7 +23,7 @@ try {
     Register-ScheduledTask -TaskName $TaskName -Action $Action -RunLevel Highest -User "SYSTEM" -Force -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)) | Out-Null
     Write-Log "Registered scheduled task: $TaskName"
 } catch {
-    Write-Log "ERROR registering task: $_" -EntryType "Error"
+    Write-Log "Failed to register task: $_" -EntryType "Error"
 }
 
 
@@ -32,7 +32,7 @@ try {
     Start-ScheduledTask -TaskName $TaskName
     Write-Log "Started scheduled task"
 } catch {
-    Write-Log "ERROR starting task: $_" -EntryType "Error"
+    Write-Log "Failed to start task: $_" -EntryType "Error"
 }
 
 
@@ -45,5 +45,5 @@ try {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     Write-Log "Unregistered scheduled task"
 } catch {
-    Write-Log "ERROR unregistering task: $_" -EntryType "Error"
+    Write-Log "Failed to unregister task: $_" -EntryType "Error"
 }

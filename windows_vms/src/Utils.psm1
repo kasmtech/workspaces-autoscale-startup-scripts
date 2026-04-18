@@ -60,14 +60,16 @@ Function Write-Log {
         [Parameter(Mandatory=$false)]
         [int]$EventID=1000,
         
-        [ValidateSet("Information", "Warning", "Error")]
+        [ValidateSet("Information", "Warning", "Error", "Debug")]
         [Parameter(Mandatory=$false)][string]$EntryType="Information"
     )
 
-    $Timestamp = $(Get-Date -Format o)  
+    $Timestamp = $(Get-Date -Format o)
 
     try {
-        Write-EventLog -LogName $LogName -Source $Source -EventID $EventID -EntryType $EntryType -Message $Message
+        # EventLog does not support Debug; map it to Information
+        $EventLogEntryType = if ($EntryType -eq "Debug") { "Information" } else { $EntryType }
+        Write-EventLog -LogName $LogName -Source $Source -EventID $EventID -EntryType $EventLogEntryType -Message $Message
     } catch {
         $ErrorLogObj = "$Timestamp`tUnable to write to eventlog:"
         Out-File -InputObject $ErrorLogObj -FilePath $LogFile -Append -Encoding "utf8"
@@ -78,7 +80,7 @@ Function Write-Log {
         Out-File -InputObject $LogObj -FilePath $LogFile -Append -Encoding "utf8"
 
         # Send to Kasm central logging
-        Send-KasmLog -Message $Message
+        Send-KasmLog -Message $Message -EntryType $EntryType
 
         # Write to console if running interactively
         if ($Host.Name -ne 'ServerHost') {
@@ -90,12 +92,23 @@ Function Write-Log {
 Function Send-KasmLog {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$Message
+        [string]$Message,
+
+        [ValidateSet("Information", "Warning", "Error", "Debug")]
+        [Parameter(Mandatory=$false)]
+        [string]$EntryType = "Information"
     )
 
     if ([string]::IsNullOrEmpty($ModuleToken) -or [string]::IsNullOrEmpty($ModuleKasmhostname)) {
         # required field missing, skipping request."
         return
+    }
+
+    $levelMap = @{
+        "Information" = "INFO"
+        "Warning"     = "WARNING"
+        "Error"       = "ERROR"
+        "Debug"       = "DEBUG"
     }
 
     #todo: this endpoint only exists in 1.18.0. Try to fall back to /api/kasm_session_log for 1.17.0 and earlier (at least 1.13.0)
@@ -109,7 +122,7 @@ Function Send-KasmLog {
                 @{
                     host = $ModuleServerName
                     application = "windows-startup-script"
-                    levelname = "INFO"  # todo: handle different logging levels: ERROR | INFO | DEBUG
+                    levelname = $levelMap[$EntryType]
                     message = $Message
                 }
             )

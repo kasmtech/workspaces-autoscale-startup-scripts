@@ -44,14 +44,14 @@ Function Install-Winfsp {
         try {
             Start-Process -FilePath $InstallerPath -ArgumentList '/q' -WorkingDirectory $ScriptDirectory -Wait
         } catch {
-            Write-Log "Error installing WinFSP: $($_.Exception.Message)"
+            Write-Log "Error installing WinFSP: $($_.Exception.Message)" -EntryType "Error"
             return
         }
 
         #Remove-Item $InstallerPath -Force
         Write-Log "Installed WinFSP" 
     } else {
-        Write-Log "No WinFSP installer found. Skipping WinFSP installation."
+        Write-Log "No WinFSP installer found. Skipping WinFSP installation." -EntryType "Warning"
     }
 }
 
@@ -92,7 +92,7 @@ Function Assert-KasmServiceStatus {
     while ($service.Status -ne $Status) {
         Start-Sleep -Seconds 1
         $service = Get-Service -Name "Kasm"
-        Write-Log "Service status: $($service.Status)"
+        Write-Log "Service status: $($service.Status)" -EntryType "Debug"
 
         $Attempts++
         if ($Attempts -ge 30) {
