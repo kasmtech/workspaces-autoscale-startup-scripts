@@ -133,24 +133,20 @@ Function Send-KasmLog {
             )
         } | ConvertTo-Json
 
-        # Set headers
-        $headers = @{
-            'Content-Type' = 'application/json'
-        }
-
-        # Send the POST request
-        $restParams = @{
-            Uri     = $Url
-            Method  = 'POST'
-            Body    = $jsonBody
-            Headers = $headers
-        }
-
+        # Build HttpClient with optional cert bypass and 10s timeout
         if ($script:ModuleSkipCertCheck) {
-            $restParams['SkipCertificateCheck'] = $true
+            $handler = [System.Net.Http.HttpClientHandler]::new()
+            $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+            $client = [System.Net.Http.HttpClient]::new($handler)
+        } else {
+            $client = [System.Net.Http.HttpClient]::new()
         }
+        $client.Timeout = [System.TimeSpan]::FromSeconds(10)
 
-        Invoke-RestMethod @restParams
+        $content = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
+
+        # Non-blocking request to Kasm API, returns immediately without blocking the startup script
+        $null = $client.PostAsync($Url, $content)
     } catch {
         $ErrorMsg = "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $($_.Exception.Message)"
         Out-File -InputObject $ErrorMsg -FilePath $KasmLogFile -Append -Encoding "utf8"
