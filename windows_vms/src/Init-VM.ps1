@@ -36,7 +36,8 @@ param(
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
-Import-Module $ScriptDirectory\Utils.psm1
+Import-Module $ScriptDirectory\Utils.psm1 -Force
+Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName
 
 $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"

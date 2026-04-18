@@ -3,6 +3,35 @@ $KasmEventSource = "kasm_startup_script"
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 
+$script:ModuleToken = $null
+$script:ModuleKasmHostname = $null
+$script:ModuleServerName = $null
+
+Function Set-LoggingProperties {
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$KasmHostname,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Token,
+
+        [Parameter(Mandatory=$false)]
+        [string]$ServerName
+    )
+
+    # Store values in script scope so it’s usable for the entire session
+    $script:ModuleKasmHostname = $KasmHostname
+    $script:ModuleToken = $Token
+
+    # todo: consider making this domain + ServerName so that "host" is consistent with desktop service loging in Kasm Dashboard
+    if ($null -eq $ServerName -or $ServerName -eq "") {
+        # Set ServerName to computer name if not set
+        $script:ModuleServerName = $env:COMPUTERNAME
+    } else {
+        $script:ModuleServerName = $ServerName
+    }
+}
+
 Function New-EventLogSource {
     # Create eventlog source for logging
     if(-not [System.Diagnostics.EventLog]::SourceExists($KasmEventSource)) {
@@ -44,12 +73,58 @@ Function Write-Log {
         Out-File -InputObject $ErrorLogObj -FilePath $LogFile -Append -Encoding "utf8"
     } finally {
         $LogObj = "$Timestamp`t$Message"
+
+        # Write to file
         Out-File -InputObject $LogObj -FilePath $LogFile -Append -Encoding "utf8"
+
+        # Send to Kasm central logging
+        Send-KasmLog -Message $Message
 
         # Write to console if running interactively
         if ($Host.Name -ne 'ServerHost') {
             Write-Host $LogObj
         }
+    }
+}
+
+Function Send-KasmLog {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+
+    if ([string]::IsNullOrEmpty($ModuleToken) -or [string]::IsNullOrEmpty($ModuleKasmhostname)) {
+        # required field missing, skipping request."
+        return
+    }
+
+    #todo: this endpoint only exists in 1.18.0. Try to fall back to /api/kasm_session_log for 1.17.0 and earlier (at least 1.13.0)
+    $Url = "https://$ModuleKasmHostname/api/component_log"
+
+    try {
+        # Create the data structure
+        $jsonBody = @{
+            token = $ModuleToken
+            logs = @(
+                @{
+                    host = $ModuleServerName
+                    application = "windows-startup-script"
+                    levelname = "INFO"  # todo: handle different logging levels: ERROR | INFO | DEBUG
+                    message = $Message
+                }
+            )
+        } | ConvertTo-Json
+
+        # Set headers
+        $headers = @{
+            'Content-Type' = 'application/json'
+        }
+
+        # Send the POST request
+        Invoke-RestMethod -Uri $Url -Method POST -Body $jsonBody -Headers $headers
+    } catch {
+        Write-Error "Failed to send request: $($_.Exception.Message)"
+        #todo: write this error to log file
     }
 }
 
