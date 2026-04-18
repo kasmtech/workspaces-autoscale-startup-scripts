@@ -6,6 +6,7 @@ $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 $script:ModuleToken = $null
 $script:ModuleKasmHostname = $null
 $script:ModuleServerName = $null
+$script:ModuleSkipCertCheck = $false
 
 Function Set-LoggingProperties {
     param(
@@ -16,12 +17,16 @@ Function Set-LoggingProperties {
         [string]$Token,
 
         [Parameter(Mandatory=$false)]
-        [string]$ServerName
+        [string]$ServerName,
+
+        [Parameter(Mandatory=$false)]
+        [bool]$SkipCertificateCheck = $false
     )
 
     # Store values in script scope so it’s usable for the entire session
     $script:ModuleKasmHostname = $KasmHostname
     $script:ModuleToken = $Token
+    $script:ModuleSkipCertCheck = $SkipCertificateCheck
 
     # todo: consider making this domain + ServerName so that "host" is consistent with desktop service loging in Kasm Dashboard
     if ($null -eq $ServerName -or $ServerName -eq "") {
@@ -134,7 +139,18 @@ Function Send-KasmLog {
         }
 
         # Send the POST request
-        Invoke-RestMethod -Uri $Url -Method POST -Body $jsonBody -Headers $headers
+        $restParams = @{
+            Uri     = $Url
+            Method  = 'POST'
+            Body    = $jsonBody
+            Headers = $headers
+        }
+
+        if ($script:ModuleSkipCertCheck) {
+            $restParams['SkipCertificateCheck'] = $true
+        }
+
+        Invoke-RestMethod @restParams
     } catch {
         $ErrorMsg = "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $($_.Exception.Message)"
         Out-File -InputObject $ErrorMsg -FilePath $KasmLogFile -Append -Encoding "utf8"

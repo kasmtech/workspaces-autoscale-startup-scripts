@@ -32,12 +32,15 @@ param(
     [string]$FSLogix_ProfileType,
 
     [Parameter(Mandatory=$false)]
-    [string]$StartAudioService=$true
+    [string]$StartAudioService=$true,
+
+    [Parameter(Mandatory=$false)]
+    [bool]$SkipCertificateCheck=$false
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Import-Module $ScriptDirectory\Utils.psm1 -Force
-Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName
+Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName -SkipCertificateCheck $SkipCertificateCheck
 
 $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
