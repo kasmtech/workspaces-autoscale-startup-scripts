@@ -4,6 +4,7 @@ set -euo pipefail
 ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
+ENABLE_EPEL=0
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -31,12 +32,6 @@ configure_iptables() {
     service iptables save
   fi
 }
-
-# this is for RHEL based OS, where xrdp is not available directly but required EPEL, please uncomment the below
-
-# dnf -y update
-# dnf install -y oracle-epel-release-el9
-# dnf config-manager --enable ol9_developer_EPEL
 
 install_xfce() {
   dnf groupinstall -y "Xfce"
@@ -119,6 +114,19 @@ install_tigervnc (){
 }
 
 install_xrdp() {
+  # Precheck: verify xrdp is available; if not, EPEL must be enabled
+  if ! dnf list available xrdp &>/dev/null; then
+    if [ "$ENABLE_EPEL" -eq 0 ]; then
+      echo "[ERROR] xrdp is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
+      return 1
+    fi
+  fi
+
+  if [ "$ENABLE_EPEL" -eq 1 ]; then
+    dnf install -y oracle-epel-release-el9
+    dnf config-manager --enable ol9_developer_EPEL
+  fi
+
   dnf install -y xrdp
 
   systemctl enable xrdp
