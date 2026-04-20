@@ -35,7 +35,7 @@ param(
     [string]$StartAudioService=$true,
 
     [Parameter(Mandatory=$false)]
-    [bool]$SkipCertificateCheck=$false
+    [bool]$SkipCertificateCheck=$true
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)

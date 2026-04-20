@@ -119,20 +119,18 @@ Function Send-KasmLog {
 
     $Url = "https://$ModuleKasmHostname/api/component_log"
 
-    try {
-        # Create the data structure
-        $jsonBody = @{
-            token = $ModuleToken
-            logs = @(
-                @{
-                    host = $ModuleServerName
-                    application = "windows-startup-script"
-                    levelname = $levelMap[$EntryType]
-                    message = $Message
-                }
-            )
-        } | ConvertTo-Json
+    $jsonBody = @{
+        token = $ModuleToken
+        logs = @(
+            @{
+                host = $ModuleServerName
+                application = "windows-startup-script"
+                levelname = $levelMap[$EntryType]
+                message = $Message
                 ingest_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            }
+        )
+    } | ConvertTo-Json
 
         # Build HttpClient with optional cert bypass and 10s timeout
         if ($script:ModuleSkipCertCheck) {
