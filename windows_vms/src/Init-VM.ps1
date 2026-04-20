@@ -51,6 +51,7 @@ $FSLogixScript = "$ScriptDirectory\Install-FSLogix.ps1"
 $AudioServiceScript = "$ScriptDirectory\Start-AudioService.ps1"
 
 $DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
+$DoRenameComputer = $RenameComputer -and $ServerName
 
 
 Function Invoke-DesktopServiceScript {
@@ -121,11 +122,6 @@ Function Register-DelayedDesktopServiceScript {
 }
 
 Function Invoke-ComputerRename {
-    if (-not $ServerName) {
-        Write-Log "No value set for ServerName. Cannot rename computer." -EntryType "Error"
-        return
-    }
-
     Write-Log "Renaming computer to $ServerName"
     Rename-Computer -NewName $ServerName -Force
 
@@ -154,7 +150,7 @@ if ($DoJoinDomain) {
     Invoke-DesktopServiceScript
     Invoke-AudioServiceScript
     Invoke-DomainJoinAndFSLogixScripts
-} elseif ($RenameComputer) {
+} elseif ($DoRenameComputer) {
     Invoke-AudioServiceScript
     Register-DelayedDesktopServiceScript
     Invoke-ComputerRename
