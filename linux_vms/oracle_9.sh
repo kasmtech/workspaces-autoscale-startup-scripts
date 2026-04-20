@@ -122,11 +122,6 @@ install_xrdp() {{
     fi
   fi
 
-  if [ "$ENABLE_EPEL" -eq 1 ]; then
-    dnf install -y oracle-epel-release-el9
-    dnf config-manager --enable ol9_developer_EPEL
-  fi
-
   dnf install -y xrdp
 
   systemctl enable xrdp
@@ -230,6 +225,12 @@ install_kds() {{
 }}
 
 sleep 5
+
+if [ "$ENABLE_EPEL" -eq 1 ]; then
+  dnf install -y oracle-epel-release-el9
+  dnf config-manager --enable ol9_developer_EPEL
+fi
+
 install_xfce
 install_screenshot_tools
 
