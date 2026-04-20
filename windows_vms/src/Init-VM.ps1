@@ -35,7 +35,10 @@ param(
     [string]$StartAudioService=$true,
 
     [Parameter(Mandatory=$false)]
-    [bool]$SkipCertificateCheck=$true
+    [bool]$SkipCertificateCheck=$true,
+
+    [Parameter(Mandatory=$false)]
+    [bool]$RenameComputer=$false
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -101,6 +104,35 @@ Function Invoke-DomainJoinAndFSLogixScripts {
     }
 }
 
+Function Register-DelayedDesktopServiceScript {
+    Write-Log "Creating scheduled task to install Kasm Desktop Service at next startup"
+
+    $TaskName = "KasmDesktopServiceInstall"
+
+    $InstallServiceCommand = "& '$DesktopServiceScript' -KasmHostname '$KasmHostname' -ServerId '$ServerId' -RegistrationToken '$RegistrationToken';"
+    $UnregisterTaskCommand = "Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false;"
+
+    $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `$ErrorActionPreference='Stop'; $InstallServiceCommand $UnregisterTaskCommand"
+    $Trigger = New-ScheduledTaskTrigger -AtStartup
+    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings
+}
+
+Function Invoke-ComputerRename {
+    if (-not $ServerName) {
+        Write-Log "No value set for ServerName. Cannot rename computer." -EntryType "Error"
+        return
+    }
+
+    Write-Log "Renaming computer to $ServerName"
+    Rename-Computer -NewName $ServerName -Force
+
+    Write-Log "Rebooting to apply computer rename"
+    Restart-Computer -Force
+}
+
 Function Invoke-InstallFSLogix {
     if ($FSLogix_ProfileLocations) {
         Write-Log "FSLogix configuration detected"
@@ -118,8 +150,17 @@ Function Invoke-InstallFSLogix {
 
 Write-Log "VM initialization script started"
 
-Invoke-DesktopServiceScript
-Invoke-AudioServiceScript
-Invoke-DomainJoinAndFSLogixScripts
+if ($DoJoinDomain) {
+    Invoke-DesktopServiceScript
+    Invoke-AudioServiceScript
+    Invoke-DomainJoinAndFSLogixScripts
+} elseif ($RenameComputer) {
+    Invoke-AudioServiceScript
+    Register-DelayedDesktopServiceScript
+    Invoke-ComputerRename
+} else {
+    Invoke-DesktopServiceScript
+    Invoke-AudioServiceScript
+}
 
 Write-Log "VM initialization script completed"
