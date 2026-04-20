@@ -5,6 +5,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 ## Features
 - Kasm Windows Desktop Service - Install and register the Kasm Desktop Service
 - Windows Audio Service - Start Windows Audio Service
+- Computer Rename - Rename the VM, reboot, and install the Desktop Service post-reboot
 - Windows Domain Join - Join the VM to a domain
 - DNS Configuration - Configure DNS for the primary network adapter
 - FSLogix - Install and configure container profiles
@@ -120,6 +121,29 @@ Connect a computer to an Active Directory domain. Additional setup information f
   -ActiveDirectoryCredential "{ad_join_credential}" `
   -DnsServers "10.0.0.52" `
   -ServerName "{server_hostname}"
+```
+
+### Computer Rename
+For scenarios where a VM needs to be renamed without joining a domain (such as VMware Instant Clones), the startup script can rename the computer, reboot, and then install the Kasm Desktop Service automatically after the reboot via a scheduled task.
+
+> **Note:** This flow is mutually exclusive with Domain Join. If domain join arguments are provided, the rename-and-reboot flow is skipped and the standard domain join process handles renaming.
+
+| Variable           | Required | Type   | Description |
+|--------------------|----------|--------|-------------|
+| $RenameComputer    | Required | bool   | Enables the rename-reboot-install flow. Must be `$true` to activate. |
+| $ServerName        | Required | string | The new hostname to assign to the VM. If used in the Startup Script, the token `{server_hostname}` will be replaced with the computer object name created by Kasm. If this value is empty, the rename flow is skipped entirely. |
+| $KasmHostname      | Required | string | Required for the Desktop Service installation that runs post-reboot. |
+| $RegistrationToken | Required | string | Required for the Desktop Service installation that runs post-reboot. |
+| $ServerId          | Required | string | Required for the Desktop Service installation that runs post-reboot. |
+
+#### Example - Rename Computer and Install Desktop Service Post-Reboot
+```powershell
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}" `
+  -ServerName "{server_hostname}" `
+  -RenameComputer $true
 ```
 
 ### FSLogix
