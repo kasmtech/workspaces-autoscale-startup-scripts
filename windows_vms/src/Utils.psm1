@@ -132,6 +132,7 @@ Function Send-KasmLog {
                 }
             )
         } | ConvertTo-Json
+                ingest_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
         # Build HttpClient with optional cert bypass and 10s timeout
         if ($script:ModuleSkipCertCheck) {
