@@ -1,3 +1,5 @@
+Add-Type -AssemblyName System.Net.Http
+
 $ProgressPreference = 'SilentlyContinue'
 $KasmEventSource = "kasm_startup_script"
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
