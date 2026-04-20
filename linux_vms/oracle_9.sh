@@ -13,7 +13,7 @@ chmod 0600 "$LOG_FILE"
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-configure_iptables() {
+configure_iptables() {{
   echo "[INFO] Adding firewall rules for RDP (3389) and Kasm (4902)"
 
   if systemctl is-active --quiet firewalld; then
@@ -31,9 +31,9 @@ configure_iptables() {
     # Persist rules to /etc/sysconfig/iptables
     service iptables save
   fi
-}
+}}
 
-install_xfce() {
+install_xfce() {{
   dnf groupinstall -y "Xfce"
   dnf install -y \
     supervisor \
@@ -43,18 +43,18 @@ install_xfce() {
     dbus-x11 \
     xorg-x11-xauth \
     xorg-x11-server-Xorg
-}
+}}
 
 # Optional:  screenshot tooling
-install_screenshot_tools() {
+install_screenshot_tools() {{
   if dnf install -y gnome-screenshot; then
     echo "[INFO] gnome-screenshot installed successfully"
   else
     echo "[WARN] gnome-screenshot not available; screenshot API may be limited on this system"
   fi
-}
+}}
 
-install_kasmvnc() {
+install_kasmvnc() {{
   cd /tmp
 
   KASM_VNC_PATH=/usr/share/kasmvnc
@@ -99,9 +99,9 @@ install_kasmvnc() {
   usermod -aG ssl-cert $KASM_VNC_USER || true
 
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}
+}}
 
-install_tigervnc (){
+install_tigervnc (){{
   dnf install -y tigervnc-server
   mkdir /home/opc/.vnc
   set +x
@@ -111,9 +111,9 @@ install_tigervnc (){
   chown -R opc:opc /home/opc/.vnc
   chmod 0600 /home/opc/.vnc/passwd
   su -l -c 'vncserver -localhost no' opc
-}
+}}
 
-install_xrdp() {
+install_xrdp() {{
   # Precheck: verify xrdp is available; if not, EPEL must be enabled
   if ! dnf list available xrdp &>/dev/null; then
     if [ "$ENABLE_EPEL" -eq 0 ]; then
@@ -132,7 +132,7 @@ install_xrdp() {
   systemctl enable xrdp
   systemctl restart xrdp
 
-  sleep 1 
+  sleep 1
 
   echo "xfce4-session" > /etc/skel/.xsession
   echo "xfce4-session" > /etc/skel/.Xsession
@@ -185,9 +185,9 @@ EOF'
 
   sleep 1
   systemctl restart xrdp
-}
+}}
 
-install_kds() {
+install_kds() {{
 
   ARCH=$(uname -m)
   if [ "$ARCH" = "x86_64" ]; then
@@ -203,11 +203,11 @@ install_kds() {
 # Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
 
  # configure_iptables
-  
+
   SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
 
-  sleep 2 
+  sleep 2
 
   set +x
   KASM_HOST_NAME="{upstream_auth_address}"
@@ -223,11 +223,11 @@ install_kds() {
     --token="$REG_TOKEN"
   set -x
 
-  sleep 2 
+  sleep 2
 
   systemctl enable kasm-desktop.service
   systemctl restart kasm-desktop.service
-}
+}}
 
 sleep 5
 install_xfce
