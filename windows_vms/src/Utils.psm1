@@ -105,8 +105,7 @@ Function Send-KasmLog {
         [string]$EntryType = "Information"
     )
 
-    if ([string]::IsNullOrEmpty($ModuleToken) -or [string]::IsNullOrEmpty($ModuleKasmhostname)) {
-        # required field missing, skipping request."
+    if ([string]::IsNullOrEmpty($ModuleToken) -or [string]::IsNullOrEmpty($ModuleKasmHostname)) {
         return
     }
 
@@ -116,8 +115,6 @@ Function Send-KasmLog {
         "Error"       = "ERROR"
         "Debug"       = "DEBUG"
     }
-
-    $Url = "https://$ModuleKasmHostname/api/component_log"
 
     $jsonBody = @{
         token = $ModuleToken
@@ -132,8 +129,12 @@ Function Send-KasmLog {
         )
     } | ConvertTo-Json
 
-        # Build HttpClient with optional cert bypass and 10s timeout
-        if ($script:ModuleSkipCertCheck) {
+    $sendScript = {
+        param($Url, $jsonBody, $skipCertCheck, $logFile, $maxRetries, $retryDelay)
+
+        Add-Type -AssemblyName System.Net.Http
+
+        if ($skipCertCheck) {
             $handler = [System.Net.Http.HttpClientHandler]::new()
             $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
             $client = [System.Net.Http.HttpClient]::new($handler)
@@ -142,14 +143,43 @@ Function Send-KasmLog {
         }
         $client.Timeout = [System.TimeSpan]::FromSeconds(10)
 
-        $content = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
+        for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+            try {
+                $content = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
+                $response = $client.PostAsync($Url, $content).GetAwaiter().GetResult()
+                $statusCode = [int]$response.StatusCode
 
-        # Non-blocking request to Kasm API, returns immediately without blocking the startup script
-        $null = $client.PostAsync($Url, $content)
-    } catch {
-        $ErrorMsg = "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $($_.Exception.Message)"
-        Out-File -InputObject $ErrorMsg -FilePath $KasmLogFile -Append -Encoding "utf8"
+                if ($response.IsSuccessStatusCode) { return }
+
+                if ($statusCode -ge 400 -and $statusCode -lt 500) {
+                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode" -FilePath $logFile -Append -Encoding "utf8"
+                    return
+                }
+
+                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+            } catch {
+                $inner = $_.Exception.InnerException
+                $detail = if ($inner) { "$($_.Exception.Message) -> $($inner.Message)" } else { $_.Exception.Message }
+                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $detail (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+            }
+
+            if ($attempt -lt $maxRetries) { Start-Sleep -Seconds $retryDelay }
+        }
     }
+
+    $ps = [System.Management.Automation.PowerShell]::Create()
+    $ps.AddScript($sendScript)                                        | Out-Null
+    $Url        = "https://$ModuleKasmHostname/api/component_log"
+    $MaxRetries = 3
+    $RetryDelay = 2
+
+    $ps.AddArgument($Url)                        | Out-Null
+    $ps.AddArgument($jsonBody)                   | Out-Null
+    $ps.AddArgument($script:ModuleSkipCertCheck) | Out-Null
+    $ps.AddArgument($KasmLogFile)                | Out-Null
+    $ps.AddArgument($MaxRetries)                 | Out-Null
+    $ps.AddArgument($RetryDelay)                 | Out-Null
+    $null = $ps.BeginInvoke()
 }
 
 Function Get-FileByPattern {
