@@ -49,10 +49,7 @@ $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
 $FSLogixScript = "$ScriptDirectory\Install-FSLogix.ps1"
 $AudioServiceScript = "$ScriptDirectory\Start-AudioService.ps1"
-
-$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
-$DoRenameComputer = $RenameComputer -and $ServerName
-
+$InstantCloneScript = "$ScriptDirectory\Initialize-InstantClone.ps1"
 
 Function Invoke-DesktopServiceScript {
     if (-not $KasmHostname) {
@@ -145,6 +142,11 @@ Function Invoke-InstallFSLogix {
 ### Main script execution ###
 
 Write-Log "VM initialization script started"
+
+$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
+$DoRenameComputer = $RenameComputer -and $ServerName
+
+& $InstantCloneScript -ComputerRename $DoRenameComputer -DomainJoin $DoJoinDomain
 
 if ($DoJoinDomain) {
     Invoke-DesktopServiceScript
