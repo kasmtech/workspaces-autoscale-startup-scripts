@@ -4,18 +4,71 @@
 # Cloudbase Init already execute startup scripts asynchronously. Running as SYSTEM ensures registry
 # operations succeed even when no user is logged in.
 
+param(
+    # Retains the generated task action scripts and their input arguments on disk after execution
+    # to allow manual inspection and re-execution for troubleshooting purposes.
+    [switch]$KeepTaskActionScripts
+)
+
 $TaskName = "KasmStartupScript"
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Import-Module $ScriptDirectory\Utils.psm1
 
 
-# Build argument string
-$StartupArgs = $args | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }
-$TaskArgs = @("-ExecutionPolicy", "Bypass", "-File", "`"$($ScriptDirectory)\Init-VM.ps1`"") + $StartupArgs
+# Build a wrapper script that calls Init-VM.ps1 with the provided values
+$paramLines = @()
+$i = 0
+while ($i -lt $args.Count) {
+    $arg     = $args[$i]
+    $nextArg = if ($i + 1 -lt $args.Count) { $args[$i + 1] } else { $null }
+    $nextIsValue = $nextArg -and ($nextArg -notmatch '^-')
+
+    if ($arg -match '^-(.+)$') {
+        $name = $Matches[1]
+        if ($nextIsValue) {
+            if ($nextArg -eq 'True') {
+                $paramLines += "    $name = `$true"
+                $i += 2
+            } elseif ($nextArg -eq 'False') {
+                $i += 2
+            } else {
+                $escaped = $nextArg -replace "'", "''"
+                $paramLines += "    $name = '$escaped'"
+                $i += 2
+            }
+        } else {
+            $paramLines += "    $name = `$true"
+            $i++
+        }
+    } else {
+        $i++
+    }
+}
+
+if ($KeepTaskActionScripts) { $paramLines += "    KeepTaskActionScripts = `$true" }
+
+$paramsBlock = $paramLines -join [Environment]::NewLine
+$keepTaskActionScriptsLiteral = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$WrapperPath = "$ScriptDirectory\Init-VM_TaskAction.ps1"
+Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
+`$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
+`$keepTaskActionScripts = $keepTaskActionScriptsLiteral
+Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+`$params = @{
+$paramsBlock
+}
+try {
+    & "`$ScriptDirectory\Init-VM.ps1" @params
+} catch {
+    Write-Log "Failed to invoke Init-VM.ps1: `$_" -EntryType "Error"
+} finally {
+    if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
+}
+"@
 
 
 # Create action for scheduled task
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($TaskArgs -join ' ')
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$WrapperPath`""
 
 
 # Register the task as SYSTEM, scheduled to run once
@@ -38,6 +91,11 @@ try {
 
 # Give it a moment to start
 Start-Sleep -Seconds 5
+
+$TaskResult = (Get-ScheduledTaskInfo -TaskName $TaskName).LastTaskResult
+if ($TaskResult -ne 0) {
+    Write-Log "Scheduled task exited with code $TaskResult" -EntryType "Error"
+}
 
 
 # Remove the task

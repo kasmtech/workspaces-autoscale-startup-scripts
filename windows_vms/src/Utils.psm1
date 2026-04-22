@@ -8,7 +8,6 @@ $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 $script:ModuleToken = $null
 $script:ModuleKasmHostname = $null
 $script:ModuleServerName = $null
-$script:ModuleSkipCertCheck = $true
 
 Function Set-LoggingProperties {
     param(
@@ -19,16 +18,12 @@ Function Set-LoggingProperties {
         [string]$Token,
 
         [Parameter(Mandatory=$false)]
-        [string]$ServerName,
-
-        [Parameter(Mandatory=$false)]
-        [bool]$SkipCertificateCheck = $true
+        [string]$ServerName
     )
 
     # Store values in script scope so it’s usable for the entire session
     $script:ModuleKasmHostname = $KasmHostname
     $script:ModuleToken = $Token
-    $script:ModuleSkipCertCheck = $SkipCertificateCheck
 
     if ($null -eq $ServerName -or $ServerName -eq "") {
         # Set ServerName to computer name if not set
@@ -130,17 +125,13 @@ Function Send-KasmLog {
     } | ConvertTo-Json
 
     $sendScript = {
-        param($Url, $jsonBody, $skipCertCheck, $logFile, $maxRetries, $retryDelay)
+        param($Url, $jsonBody, $logFile, $maxRetries, $retryDelay)
 
         Add-Type -AssemblyName System.Net.Http
 
-        if ($skipCertCheck) {
-            $handler = [System.Net.Http.HttpClientHandler]::new()
-            $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
-            $client = [System.Net.Http.HttpClient]::new($handler)
-        } else {
-            $client = [System.Net.Http.HttpClient]::new()
-        }
+        $handler = [System.Net.Http.HttpClientHandler]::new()
+        $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+        $client = [System.Net.Http.HttpClient]::new($handler)
         $client.Timeout = [System.TimeSpan]::FromSeconds(10)
 
         for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
@@ -173,12 +164,11 @@ Function Send-KasmLog {
     $MaxRetries = 3
     $RetryDelay = 2
 
-    $ps.AddArgument($Url)                        | Out-Null
-    $ps.AddArgument($jsonBody)                   | Out-Null
-    $ps.AddArgument($script:ModuleSkipCertCheck) | Out-Null
-    $ps.AddArgument($KasmLogFile)                | Out-Null
-    $ps.AddArgument($MaxRetries)                 | Out-Null
-    $ps.AddArgument($RetryDelay)                 | Out-Null
+    $ps.AddArgument($Url)          | Out-Null
+    $ps.AddArgument($jsonBody)     | Out-Null
+    $ps.AddArgument($KasmLogFile)  | Out-Null
+    $ps.AddArgument($MaxRetries)   | Out-Null
+    $ps.AddArgument($RetryDelay)   | Out-Null
     $null = $ps.BeginInvoke()
 }
 
