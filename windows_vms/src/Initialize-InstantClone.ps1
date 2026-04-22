@@ -2,7 +2,7 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [bool]$SkipDisableNetBios=$false,
+    [switch]$SkipDisableNetBios,
 
     [Parameter(Mandatory=$false)]
     [bool]$ComputerRename=$false,
