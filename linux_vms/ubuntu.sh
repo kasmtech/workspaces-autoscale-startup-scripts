@@ -2,10 +2,10 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-# Change these flags to only install the desired services
 ENABLE_KASMVNC=1
 ENABLE_XRDP=1
 ENABLE_KDS=1
+ENABLE_IPTABLES=0
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -15,16 +15,23 @@ echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 configure_iptables() {{
-  echo "[INFO] Adding iptables rules for RDP (3389) and Kasm (4902) at $(date)"
+  echo "[INFO] Adding firewall rules at $(date)"
 
-  iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
-  iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
-
-  if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save
+  if systemctl is-active --quiet ufw; then
+    [ "$ENABLE_XRDP"    -eq 1 ] && ufw allow 3389/tcp
+    [ "$ENABLE_KDS"     -eq 1 ] && ufw allow 4902/tcp
+    [ "$ENABLE_KASMVNC" -eq 1 ] && ufw allow 5902/tcp
   else
-    apt-get install -y netfilter-persistent
-    netfilter-persistent save
+    [ "$ENABLE_XRDP"    -eq 1 ] && iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
+    [ "$ENABLE_KDS"     -eq 1 ] && iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
+    [ "$ENABLE_KASMVNC" -eq 1 ] && iptables -I INPUT -p tcp --dport 5902 -j ACCEPT
+
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+      netfilter-persistent save
+    else
+      apt-get install -y netfilter-persistent
+      netfilter-persistent save
+    fi
   fi
 }}
 
@@ -56,12 +63,10 @@ install_kasmvnc (){{
   else
     BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_jammy_1.4.0_arm64.deb"
   fi
- 
-  # Disable xtrace for the duration of secret handling
-  set +x
+
   KASM_VNC_PASSWD="{connection_password}"
   KASM_VNC_USER="{connection_username}"
-  set -x
+
   wget "$BUILD_URL" -O kasmvncserver.deb
   apt-get install -y gettext ssl-cert libxfont2
   apt-get install -y /tmp/kasmvncserver.deb
@@ -72,9 +77,7 @@ install_kasmvnc (){{
   chown -R 0:0 $KASM_VNC_PATH
   chmod -R og-w $KASM_VNC_PATH
   chown -R 1000:0 $KASM_VNC_PATH/www/Downloads
-  set +x
   echo -e "$KASM_VNC_PASSWD\n$KASM_VNC_PASSWD\n" | kasmvncpasswd -u $KASM_VNC_USER -w "/home/$KASM_VNC_USER/.kasmpasswd"
-  set -x
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
   addgroup $KASM_VNC_USER ssl-cert
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
@@ -83,9 +86,7 @@ install_kasmvnc (){{
 install_tigervnc (){{
   apt-get install -y tigervnc-standalone-server
   mkdir /home/ubuntu/.vnc
-  set +x
   echo "{connection_password}" | vncpasswd -f > /home/ubuntu/.vnc/passwd
-  set -x
   echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/ubuntu/.vnc/xstartup
   chown -R ubuntu:ubuntu /home/ubuntu/.vnc
   chmod 0600 /home/ubuntu/.vnc/passwd
@@ -93,7 +94,7 @@ install_tigervnc (){{
 }}
 
 install_xrdp () {{
-  apt-get install -y xrdp xfce4 xfce4-goodies dbus-x11 xorg x11-xserver-utils
+  apt-get install -y xrdp dbus-x11 xorg x11-xserver-utils
 
   adduser xrdp ssl-cert || true
   systemctl enable xrdp
@@ -114,9 +115,9 @@ export \$(dbus-launch)
 xfce4-session
 EOF'
   chmod +x /etc/xrdp/startwm.sh
-  
-  sleep 1 
-  
+
+  sleep 1
+
   mkdir -p /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
   bash -c 'cat >/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -148,8 +149,8 @@ Identity=unix-user:*
 Action=org.freedesktop.color-manager.*
 ResultActive=yes
 EOF'
-  sleep 1 
 
+  sleep 1
   systemctl restart xrdp
 }}
 
@@ -165,17 +166,13 @@ install_kds () {{
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
 
-# Uncomment the command below if using iptables.
-# Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
-
-# configure_iptables
+  [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
   SKIP_KASM_REGISTRATION=1 apt-get install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
-  sleep 2 
+  sleep 2
 
-  set +x
   KASM_HOST_NAME="{upstream_auth_address}"
   REG_TOKEN="{checkin_jwt}"
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
@@ -187,9 +184,8 @@ install_kds () {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN"
-  set -x
 
-  sleep 2 
+  sleep 2
 
   systemctl enable kasm-desktop.service
   systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
@@ -200,9 +196,11 @@ sleep 10
 apt_wait
 apt-get update
 
+install_xfce
+
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
-  # install_tigervnc  
+  # install_tigervnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
@@ -212,3 +210,5 @@ fi
 if [ "$ENABLE_KDS" -eq 1 ]; then
   install_kds
 fi
+
+echo "===== KASM INSTALL COMPLETED $(date) ====="

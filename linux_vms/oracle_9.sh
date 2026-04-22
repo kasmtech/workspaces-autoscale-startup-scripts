@@ -5,6 +5,7 @@ ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
 ENABLE_EPEL=0
+ENABLE_IPTABLES=0
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -14,21 +15,22 @@ echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 configure_iptables() {{
-  echo "[INFO] Adding firewall rules for RDP (3389) and Kasm (4902)"
+  echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet firewalld; then
-    firewall-cmd --add-port=3389/tcp --permanent
-    firewall-cmd --add-port=4902/tcp --permanent
+    [ "$ENABLE_XRDP"    -eq 1 ] && firewall-cmd --add-port=3389/tcp --permanent
+    [ "$ENABLE_KDS"     -eq 1 ] && firewall-cmd --add-port=4902/tcp --permanent
+    [ "$ENABLE_KASMVNC" -eq 1 ] && firewall-cmd --add-port=5902/tcp --permanent
     firewall-cmd --reload
   else
     dnf install -y iptables-services
     systemctl enable iptables
     systemctl start iptables
 
-    iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
-    iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
+    [ "$ENABLE_XRDP"    -eq 1 ] && iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
+    [ "$ENABLE_KDS"     -eq 1 ] && iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
+    [ "$ENABLE_KASMVNC" -eq 1 ] && iptables -I INPUT -p tcp --dport 5902 -j ACCEPT
 
-    # Persist rules to /etc/sysconfig/iptables
     service iptables save
   fi
 }}
@@ -65,11 +67,8 @@ install_kasmvnc() {{
     BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_oracle_9_1.4.0_aarch64.rpm"
   fi
 
-  # Disable xtrace for the duration of secret handling
-  set +x
   KASM_VNC_PASSWD="{connection_password}"
   KASM_VNC_USER="{connection_username}"
-  set -x
 
   dnf install -y \
     gettext \
@@ -90,10 +89,8 @@ install_kasmvnc() {{
   chmod -R og-w $KASM_VNC_PATH
   chown -R 1000:0 $KASM_VNC_PATH/www/Downloads
 
-  set +x
   echo -e "$KASM_VNC_PASSWD\n$KASM_VNC_PASSWD\n" | \
     kasmvncpasswd -u $KASM_VNC_USER -w "/home/$KASM_VNC_USER/.kasmpasswd"
-  set -x
 
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
   usermod -aG ssl-cert $KASM_VNC_USER || true
@@ -104,9 +101,7 @@ install_kasmvnc() {{
 install_tigervnc (){{
   dnf install -y tigervnc-server
   mkdir /home/opc/.vnc
-  set +x
   echo "{connection_password}" | vncpasswd -f > /home/opc/.vnc/passwd
-  set -x
   echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/opc/.vnc/xstartup
   chown -R opc:opc /home/opc/.vnc
   chmod 0600 /home/opc/.vnc/passwd
@@ -194,17 +189,13 @@ install_kds() {{
   cd /tmp
   wget "$KDS_RPM_URL" -O kasm-desktop-service.rpm
 
-# Uncomment the command below if using iptables.
-# Verify that the routine (defined above) modifies iptables in a way appropriate for your use case.
-
- # configure_iptables
+  [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
   SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
 
   sleep 2
 
-  set +x
   KASM_HOST_NAME="{upstream_auth_address}"
   REG_TOKEN="{checkin_jwt}"
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
@@ -216,12 +207,11 @@ install_kds() {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN"
-  set -x
 
   sleep 2
 
   systemctl enable kasm-desktop.service
-  systemctl restart kasm-desktop.service
+  systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
 }}
 
 sleep 5
