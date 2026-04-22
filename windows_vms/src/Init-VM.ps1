@@ -42,6 +42,13 @@ param(
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
+
+# Catch terminating errors before Import-Module runs, when Write-Log is not yet available
+trap {
+    "$(Get-Date -Format o)`tFATAL: $_" | Out-File -FilePath "$ScriptDirectory\kasm_startup_script.log" -Append -Encoding utf8
+    exit 1
+}
+
 Import-Module $ScriptDirectory\Utils.psm1 -Force
 Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName
 
