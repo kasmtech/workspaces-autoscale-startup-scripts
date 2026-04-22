@@ -36,6 +36,11 @@ configure_iptables() {{
 }}
 
 install_xfce() {{
+  if [ "$ENABLE_EPEL" -eq 1 ]; then
+    echo "[INFO] Enabling EPEL for Xfce packages"
+    dnf install -y oracle-epel-release-el9
+    dnf config-manager --enable ol9_developer_EPEL
+  fi
   dnf groupinstall -y "Xfce"
   dnf install -y \
     supervisor \
