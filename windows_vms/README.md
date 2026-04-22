@@ -143,7 +143,7 @@ For scenarios where a VM needs to be renamed without joining a domain (such as V
   -RegistrationToken "{checkin_jwt}" `
   -ServerId "{server_id}" `
   -ServerName "{server_hostname}" `
-  -RenameComputer $true
+  -RenameComputer
 ```
 
 ### FSLogix
