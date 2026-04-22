@@ -32,13 +32,13 @@ param(
     [string]$FSLogix_ProfileType,
 
     [Parameter(Mandatory=$false)]
-    [string]$StartAudioService=$true,
+    [switch]$SkipStartAudioService,
 
     [Parameter(Mandatory=$false)]
-    [bool]$SkipCertificateCheck=$true,
+    [switch]$RenameComputer,
 
     [Parameter(Mandatory=$false)]
-    [bool]$RenameComputer=$false
+    [switch]$KeepTaskActionScripts
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -74,7 +74,7 @@ Function Invoke-DesktopServiceScript {
 }
 
 Function Invoke-AudioServiceScript {
-    if ($StartAudioService -and (Test-FileExists -Path $AudioServiceScript)) {
+    if (-not $SkipStartAudioService -and (Test-FileExists -Path $AudioServiceScript)) {
         Write-Log "Audio Service configuration detected"
 
         if ((Test-FileExists -Path $AudioServiceScript)){
@@ -106,19 +106,25 @@ Function Invoke-DomainJoinAndFSLogixScripts {
 }
 
 Function Register-DelayedDesktopServiceScript {
-    Write-Log "Creating scheduled task to install Kasm Desktop Service at next startup"
+    if (-not $KasmHostname) {
+        Write-Log "No value set for KasmHostname. Skipping Kasm Desktop Service installation."
+        return
+    } elseif (-not $RegistrationToken) {
+        Write-Log "No value set for RegistrationToken. Skipping Kasm Desktop Service installation."
+        return
+    } elseif (-not $ServerId) {
+        Write-Log "No value set for ServerId. Skipping Kasm Desktop Service installation."
+        return
+    }
 
-    $TaskName = "KasmDesktopServiceInstall"
+    $DesktopServiceTaskScript = "$ScriptDirectory\Install-KasmDesktopService-Task.ps1"
 
-    $InstallServiceCommand = "& '$DesktopServiceScript' -KasmHostname '$KasmHostname' -ServerId '$ServerId' -RegistrationToken '$RegistrationToken';"
-    $UnregisterTaskCommand = "Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false;"
-
-    $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `$ErrorActionPreference='Stop'; $InstallServiceCommand $UnregisterTaskCommand"
-    $Trigger = New-ScheduledTaskTrigger -AtStartup
-    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
-    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-
-    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings
+    if (Test-FileExists -Path $DesktopServiceTaskScript) {
+        Write-Log "Invoking $DesktopServiceTaskScript"
+        & $DesktopServiceTaskScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -KeepTaskActionScripts:$KeepTaskActionScripts
+    } else {
+        Write-Log "Desktop service task script does not exist: $DesktopServiceTaskScript" -EntryType "Error"
+    }
 }
 
 Function Invoke-ComputerRename {
