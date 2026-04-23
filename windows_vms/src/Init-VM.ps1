@@ -57,9 +57,21 @@ $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
 $FSLogixScript = "$ScriptDirectory\Install-FSLogix.ps1"
 $AudioServiceScript = "$ScriptDirectory\Start-AudioService.ps1"
 
-$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
-$DoRenameComputer = $RenameComputer -and $ServerName
+Function Get-DoComputerRename {
+    if (-not $RenameComputer) { return $false }
 
+    if (-not $ServerName) {
+        Write-Log "RenameComputer is set but ServerName is empty. Skipping rename." -EntryType "Warning"
+        return $false
+    }
+
+    if ($env:COMPUTERNAME -eq $ServerName) {
+        Write-Log "Computer name is already '$ServerName'. Skipping rename."
+        return $false
+    }
+
+    return $true
+}
 
 Function Invoke-DesktopServiceScript {
     if (-not $KasmHostname) {
@@ -158,6 +170,9 @@ Function Invoke-InstallFSLogix {
 ### Main script execution ###
 
 Write-Log "VM initialization script started"
+
+$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
+$DoRenameComputer = Get-DoComputerRename
 
 if ($DoJoinDomain) {
     Invoke-DesktopServiceScript
