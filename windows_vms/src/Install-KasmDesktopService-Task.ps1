@@ -30,6 +30,7 @@ Set-Content -Path $TaskActionPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
 `$keepTaskActionScripts = $keepLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 `$params = @{
     KasmHostname      = '$escapedHostname'
     ServerId          = '$escapedServerId'
@@ -41,7 +42,6 @@ try {
     Write-Log "Failed to invoke Install-KasmDesktopService.ps1: `$_" -EntryType "Error"
 } finally {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false -ErrorAction SilentlyContinue
-    if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 }
 "@
 

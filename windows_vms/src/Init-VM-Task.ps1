@@ -51,6 +51,7 @@ Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
 `$keepTaskActionScripts = $keepTaskActionScriptsLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 `$argv = @(
 $argvBlock
 )
@@ -58,8 +59,6 @@ try {
     & "`$ScriptDirectory\Init-VM.ps1" @argv
 } catch {
     Write-Log "Failed to invoke Init-VM.ps1: `$_" -EntryType "Error"
-} finally {
-    if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 }
 "@
 
