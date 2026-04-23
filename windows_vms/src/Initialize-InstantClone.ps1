@@ -16,7 +16,7 @@ Import-Module $ScriptDirectory\Utils.psm1
 
 Function Get-IsInstantClone {
     try {
-        $CloneType = & vmware-rpctool "info-get guestinfo.clone.type" 2>$null
+        $CloneType = (& "C:\Program Files\VMware\VMware Tools\vmtoolsd.exe" --cmd "info-get guestinfo.clone.type" | Out-String).Trim()
         return ($CloneType -and $CloneType.Trim() -eq "instant")
     } catch {
         return $false
