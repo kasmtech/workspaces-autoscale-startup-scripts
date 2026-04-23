@@ -88,11 +88,6 @@ try {
 # Give it a moment to start
 Start-Sleep -Seconds 5
 
-$TaskResult = (Get-ScheduledTaskInfo -TaskName $TaskName).LastTaskResult
-if ($TaskResult -ne 0) {
-    Write-Log "Scheduled task exited with code $TaskResult" -EntryType "Error"
-}
-
 
 # Remove the task
 try {
