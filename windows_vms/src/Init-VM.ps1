@@ -31,14 +31,13 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$FSLogix_ProfileType,
 
-    [Parameter(Mandatory=$false)]
     [switch]$SkipStartAudioService,
 
-    [Parameter(Mandatory=$false)]
     [switch]$RenameComputer,
 
-    [Parameter(Mandatory=$false)]
-    [switch]$KeepTaskActionScripts
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -50,7 +49,7 @@ trap {
 }
 
 Import-Module $ScriptDirectory\Utils.psm1 -Force
-Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName
+Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName -VerifyKasmApiCert:$VerifyKasmApiCert
 
 $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
@@ -85,7 +84,7 @@ Function Invoke-DesktopServiceScript {
 
         if (Test-FileExists -Path $DesktopServiceScript) {
             Write-Log "Invoking $DesktopServiceScript"
-            & $DesktopServiceScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -AwaitDomain $DoJoinDomain
+            & $DesktopServiceScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -AwaitDomain $DoJoinDomain -VerifyKasmApiCert:$VerifyKasmApiCert
         } else {
             Write-Log "Kasm Desktop Service script does not exist: $DesktopServiceScript" -EntryType "Error"
         } 
@@ -140,7 +139,7 @@ Function Register-DelayedDesktopServiceScript {
 
     if (Test-FileExists -Path $DesktopServiceTaskScript) {
         Write-Log "Invoking $DesktopServiceTaskScript"
-        & $DesktopServiceTaskScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -KeepTaskActionScripts:$KeepTaskActionScripts
+        & $DesktopServiceTaskScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -KeepTaskActionScripts:$KeepTaskActionScripts -VerifyKasmApiCert:$VerifyKasmApiCert
     } else {
         Write-Log "Desktop service task script does not exist: $DesktopServiceTaskScript" -EntryType "Error"
     }

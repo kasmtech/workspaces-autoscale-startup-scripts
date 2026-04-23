@@ -13,7 +13,9 @@ param(
     [string]$RegistrationToken,
 
     [Parameter(Mandatory=$false)]
-    [switch]$KeepTaskActionScripts
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $TaskName = "KasmDesktopServiceInstall"
@@ -24,6 +26,7 @@ $escapedHostname = $KasmHostname      -replace "'", "''"
 $escapedServerId = $ServerId          -replace "'", "''"
 $escapedToken    = $RegistrationToken -replace "'", "''"
 $keepLiteral     = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$verifyLiteral   = if ($VerifyKasmApiCert)    { '$true' } else { '$false' }
 
 $TaskActionPath = "$ScriptDirectory\Install-KasmDesktopService_TaskAction.ps1"
 Set-Content -Path $TaskActionPath -Encoding UTF8 -Value @"
@@ -35,6 +38,7 @@ if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definit
     KasmHostname      = '$escapedHostname'
     ServerId          = '$escapedServerId'
     RegistrationToken = '$escapedToken'
+    VerifyKasmApiCert = $verifyLiteral
 }
 try {
     & "`$ScriptDirectory\Install-KasmDesktopService.ps1" @params

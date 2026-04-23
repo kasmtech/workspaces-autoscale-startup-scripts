@@ -17,7 +17,9 @@ param(
     [bool]$Winfsp=$true,
 
     [Parameter(Mandatory=$false)]
-    [bool]$AwaitDomain=$false
+    [bool]$AwaitDomain=$false,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -187,7 +189,10 @@ Function Test-RegistrationToken {
 }
 
 Function Register-KasmDesktopService {
-    Disable-SSLVerification
+    if (-not $VerifyKasmApiCert) {
+        Disable-SSLVerification
+    }
+
     Test-RegistrationToken
 
     Write-Log "Registering the Windows Service as $ServerId with the Kasm deployment at $KasmHostname"

@@ -8,7 +8,7 @@ $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 $script:ModuleToken = $null
 $script:ModuleKasmHostname = $null
 $script:ModuleServerName = $null
-$script:ModuleSkipCertCheck = $true
+$script:ModuleVerifyKasmApiCert = $false
 
 Function Set-LoggingProperties {
     param(
@@ -21,14 +21,13 @@ Function Set-LoggingProperties {
         [Parameter(Mandatory=$false)]
         [string]$ServerName,
 
-        [Parameter(Mandatory=$false)]
-        [bool]$SkipCertificateCheck = $true
+        [switch]$VerifyKasmApiCert
     )
 
     # Store values in script scope so it’s usable for the entire session
     $script:ModuleKasmHostname = $KasmHostname
     $script:ModuleToken = $Token
-    $script:ModuleSkipCertCheck = $SkipCertificateCheck
+    $script:ModuleVerifyKasmApiCert = $VerifyKasmApiCert.IsPresent
 
     if ($null -eq $ServerName -or $ServerName -eq "") {
         # Set ServerName to computer name if not set
@@ -134,13 +133,13 @@ Function Send-KasmLog {
     $RetryDelay      = 2
     $capturedJson    = $jsonBody
     $capturedLogFile = $KasmLogFile
-    $capturedSkip    = $script:ModuleSkipCertCheck
+    $capturedVerify  = $script:ModuleVerifyKasmApiCert
 
     $null = [System.Threading.Tasks.Task]::Run([System.Action]({
         Add-Type -AssemblyName System.Net.Http
 
         $handler = [System.Net.Http.HttpClientHandler]::new()
-        if ($capturedSkip) {
+        if (-not $capturedVerify) {
             $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
         }
         $client = [System.Net.Http.HttpClient]::new($handler)
