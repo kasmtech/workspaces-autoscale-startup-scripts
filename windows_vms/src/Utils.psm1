@@ -8,6 +8,7 @@ $KasmLogFile = "$ScriptDirectory\kasm_startup_script.log"
 $script:ModuleToken = $null
 $script:ModuleKasmHostname = $null
 $script:ModuleServerName = $null
+$script:ModuleSkipCertCheck = $true
 
 Function Set-LoggingProperties {
     param(
@@ -124,52 +125,56 @@ Function Send-KasmLog {
         )
     } | ConvertTo-Json
 
-    $sendScript = {
-        param($Url, $jsonBody, $logFile, $maxRetries, $retryDelay)
+    $Url             = "https://$ModuleKasmHostname/api/component_log"
+    $MaxRetries      = 3
+    $RetryDelay      = 2
+    $capturedJson    = $jsonBody
+    $capturedLogFile = $KasmLogFile
+    $capturedSkip    = $script:ModuleSkipCertCheck
 
+    $null = [System.Threading.Tasks.Task]::Run([System.Action]({
         Add-Type -AssemblyName System.Net.Http
 
         $handler = [System.Net.Http.HttpClientHandler]::new()
-        $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+        if ($capturedSkip) {
+            $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+        }
         $client = [System.Net.Http.HttpClient]::new($handler)
         $client.Timeout = [System.TimeSpan]::FromSeconds(10)
 
-        for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-            try {
-                $content = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
-                $response = $client.PostAsync($Url, $content).GetAwaiter().GetResult()
-                $statusCode = [int]$response.StatusCode
+        try {
+            for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+                $content  = $null
+                $response = $null
+                try {
+                    $content  = [System.Net.Http.StringContent]::new($capturedJson, [System.Text.Encoding]::UTF8, 'application/json')
+                    $response = $client.PostAsync($Url, $content).GetAwaiter().GetResult()
+                    $statusCode = [int]$response.StatusCode
 
-                if ($response.IsSuccessStatusCode) { return }
+                    if ($response.IsSuccessStatusCode) { return }
 
-                if ($statusCode -ge 400 -and $statusCode -lt 500) {
-                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode" -FilePath $logFile -Append -Encoding "utf8"
-                    return
+                    if ($statusCode -ge 400 -and $statusCode -lt 500) {
+                        Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode" -FilePath $capturedLogFile -Append -Encoding "utf8"
+                        return
+                    }
+
+                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode (attempt $attempt of $MaxRetries)" -FilePath $capturedLogFile -Append -Encoding "utf8"
+                } catch {
+                    $inner  = $_.Exception.InnerException
+                    $detail = if ($inner) { "$($_.Exception.Message) -> $($inner.Message)" } else { $_.Exception.Message }
+                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $detail (attempt $attempt of $MaxRetries)" -FilePath $capturedLogFile -Append -Encoding "utf8"
+                } finally {
+                    if ($response) { $response.Dispose() }
+                    if ($content)  { $content.Dispose()  }
                 }
 
-                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
-            } catch {
-                $inner = $_.Exception.InnerException
-                $detail = if ($inner) { "$($_.Exception.Message) -> $($inner.Message)" } else { $_.Exception.Message }
-                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $detail (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+                if ($attempt -lt $MaxRetries) { Start-Sleep -Seconds $RetryDelay }
             }
-
-            if ($attempt -lt $maxRetries) { Start-Sleep -Seconds $retryDelay }
+        } finally {
+            $client.Dispose()
+            $handler.Dispose()
         }
-    }
-
-    $ps = [System.Management.Automation.PowerShell]::Create()
-    $ps.AddScript($sendScript)                                        | Out-Null
-    $Url        = "https://$ModuleKasmHostname/api/component_log"
-    $MaxRetries = 3
-    $RetryDelay = 2
-
-    $ps.AddArgument($Url)          | Out-Null
-    $ps.AddArgument($jsonBody)     | Out-Null
-    $ps.AddArgument($KasmLogFile)  | Out-Null
-    $ps.AddArgument($MaxRetries)   | Out-Null
-    $ps.AddArgument($RetryDelay)   | Out-Null
-    $null = $ps.BeginInvoke()
+    }.GetNewClosure()))
 }
 
 Function Get-FileByPattern {
