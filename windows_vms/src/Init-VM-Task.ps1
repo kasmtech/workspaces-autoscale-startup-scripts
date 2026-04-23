@@ -15,50 +15,47 @@ $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Import-Module $ScriptDirectory\Utils.psm1
 
 
-# Build a wrapper script that calls Init-VM.ps1 with the provided values
-$paramLines = @()
+# Serialize $args into a clean argv array, normalizing bool-as-string values
+# (e.g. "-Switch True/False") and preserving multi-value parameters
+# (e.g. -DnsServers 1.1.1.1 8.8.8.8) so PowerShell's own binder handles them.
+$argv = [System.Collections.Generic.List[string]]::new()
 $i = 0
 while ($i -lt $args.Count) {
-    $arg     = $args[$i]
-    $nextArg = if ($i + 1 -lt $args.Count) { $args[$i + 1] } else { $null }
-    $nextIsValue = $nextArg -and ($nextArg -notmatch '^-')
-
-    if ($arg -match '^-(.+)$') {
-        $name = $Matches[1]
-        if ($nextIsValue) {
-            if ($nextArg -eq 'True') {
-                $paramLines += "    $name = `$true"
-                $i += 2
-            } elseif ($nextArg -eq 'False') {
-                $i += 2
+    $arg = $args[$i]
+    if ($arg -match '^-') {
+        $argv.Add($arg)
+        $i++
+        while ($i -lt $args.Count -and $args[$i] -notmatch '^-') {
+            $val = $args[$i]
+            if ($val -eq 'True') {
+                $i++  # switch already added; drop 'True'
+            } elseif ($val -eq 'False') {
+                $argv.RemoveAt($argv.Count - 1)  # remove switch; drop 'False'
+                $i++
             } else {
-                $escaped = $nextArg -replace "'", "''"
-                $paramLines += "    $name = '$escaped'"
-                $i += 2
+                $argv.Add($val)
+                $i++
             }
-        } else {
-            $paramLines += "    $name = `$true"
-            $i++
         }
     } else {
         $i++
     }
 }
+if ($KeepTaskActionScripts) { $argv.Add('-KeepTaskActionScripts') }
 
-if ($KeepTaskActionScripts) { $paramLines += "    KeepTaskActionScripts = `$true" }
-
-$paramsBlock = $paramLines -join [Environment]::NewLine
+$argvLines = $argv | ForEach-Object { "    '$($_ -replace "'", "''")'" }
+$argvBlock = $argvLines -join ",$([Environment]::NewLine)"
 $keepTaskActionScriptsLiteral = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
 $WrapperPath = "$ScriptDirectory\Init-VM_TaskAction.ps1"
 Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
 `$keepTaskActionScripts = $keepTaskActionScriptsLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
-`$params = @{
-$paramsBlock
-}
+`$argv = @(
+$argvBlock
+)
 try {
-    & "`$ScriptDirectory\Init-VM.ps1" @params
+    & "`$ScriptDirectory\Init-VM.ps1" @argv
 } catch {
     Write-Log "Failed to invoke Init-VM.ps1: `$_" -EntryType "Error"
 } finally {
