@@ -19,12 +19,16 @@ Function Set-LoggingProperties {
         [string]$Token,
 
         [Parameter(Mandatory=$false)]
-        [string]$ServerName
+        [string]$ServerName,
+
+        [Parameter(Mandatory=$false)]
+        [bool]$SkipCertificateCheck = $true
     )
 
     # Store values in script scope so it’s usable for the entire session
     $script:ModuleKasmHostname = $KasmHostname
     $script:ModuleToken = $Token
+    $script:ModuleSkipCertCheck = $SkipCertificateCheck
 
     if ($null -eq $ServerName -or $ServerName -eq "") {
         # Set ServerName to computer name if not set
