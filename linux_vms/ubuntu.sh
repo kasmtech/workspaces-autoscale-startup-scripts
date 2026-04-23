@@ -168,7 +168,7 @@ install_kds () {{
 
   [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
-  SKIP_KASM_REGISTRATION=1 apt-get install -y ./kasm-desktop-service.deb
+  apt-get install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
   sleep 2
