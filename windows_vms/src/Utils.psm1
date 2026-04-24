@@ -130,10 +130,11 @@ Function Send-KasmLog {
     } | ConvertTo-Json
 
     $sendScript = {
-        param($Url, $jsonBody, $skipCertCheck, $logFile, $maxRetries, $retryDelay)
+        param($Url, $jsonBody, $skipCertCheck, $logFile, $maxRetries, $retryDelay, $psInstance)
 
         Add-Type -AssemblyName System.Net.Http
 
+        $handler = $null
         if ($skipCertCheck) {
             $handler = [System.Net.Http.HttpClientHandler]::new()
             $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
@@ -143,27 +144,38 @@ Function Send-KasmLog {
         }
         $client.Timeout = [System.TimeSpan]::FromSeconds(10)
 
-        for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-            try {
-                $content = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
-                $response = $client.PostAsync($Url, $content).GetAwaiter().GetResult()
-                $statusCode = [int]$response.StatusCode
+        try {
+            for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+                $content  = $null
+                $response = $null
+                try {
+                    $content  = [System.Net.Http.StringContent]::new($jsonBody, [System.Text.Encoding]::UTF8, 'application/json')
+                    $response = $client.PostAsync($Url, $content).GetAwaiter().GetResult()
+                    $statusCode = [int]$response.StatusCode
 
-                if ($response.IsSuccessStatusCode) { return }
+                    if ($response.IsSuccessStatusCode) { return }
 
-                if ($statusCode -ge 400 -and $statusCode -lt 500) {
-                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode" -FilePath $logFile -Append -Encoding "utf8"
-                    return
+                    if ($statusCode -ge 400 -and $statusCode -lt 500) {
+                        Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode" -FilePath $logFile -Append -Encoding "utf8"
+                        return
+                    }
+
+                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+                } catch {
+                    $inner = $_.Exception.InnerException
+                    $detail = if ($inner) { "$($_.Exception.Message) -> $($inner.Message)" } else { $_.Exception.Message }
+                    Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $detail (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+                } finally {
+                    if ($response) { $response.Dispose() }
+                    if ($content)  { $content.Dispose()  }
                 }
 
-                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: HTTP $statusCode (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
-            } catch {
-                $inner = $_.Exception.InnerException
-                $detail = if ($inner) { "$($_.Exception.Message) -> $($inner.Message)" } else { $_.Exception.Message }
-                Out-File -InputObject "$(Get-Date -Format o)`tFailed to send log to REST endpoint: $detail (attempt $attempt of $maxRetries)" -FilePath $logFile -Append -Encoding "utf8"
+                if ($attempt -lt $maxRetries) { Start-Sleep -Seconds $retryDelay }
             }
-
-            if ($attempt -lt $maxRetries) { Start-Sleep -Seconds $retryDelay }
+        } finally {
+            $client.Dispose()
+            if ($handler)    { $handler.Dispose()    }
+            if ($psInstance) { $psInstance.Dispose() }
         }
     }
 
@@ -179,6 +191,7 @@ Function Send-KasmLog {
     $ps.AddArgument($KasmLogFile)                | Out-Null
     $ps.AddArgument($MaxRetries)                 | Out-Null
     $ps.AddArgument($RetryDelay)                 | Out-Null
+    $ps.AddArgument($ps)                         | Out-Null
     $null = $ps.BeginInvoke()
 }
 
