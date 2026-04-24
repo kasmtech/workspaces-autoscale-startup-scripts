@@ -4,7 +4,7 @@ set -euo pipefail
 ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
-ENABLE_EPEL=0
+ENABLE_EPEL=1
 ENABLE_IPTABLES=0
 
 LOG_FILE="/var/log/kasm_install.log"

@@ -44,11 +44,11 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC on an Oracle L
 | `ENABLE_KASMVNC` | `0` | Install and configure KasmVNC |
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
-| `ENABLE_EPEL` | `0` | Enable the EPEL repository before installing packages. Required if xrdp or other packages are not available in the default Oracle Linux repos. |
+| `ENABLE_EPEL` | `1` | Enable the EPEL repository before installing packages. Required on Oracle Linux 9 for xrdp and Xfce. |
 | `ENABLE_IPTABLES` | `0` | Open required firewall ports via firewalld (preferred) or iptables |
 
 #### EPEL on Oracle Linux 9
-Xfce and xrdp are not included in Oracle Linux 9's default repositories. Set `ENABLE_EPEL=1` to automatically enable the `ol9_developer_EPEL` repository before package installation. EPEL is disabled by default as a security precaution — verify your organization's policy before enabling it.
+Xfce and xrdp are not included in Oracle Linux 9's default repositories, so `ENABLE_EPEL=1` is the default to ensure the script works out of the box on OCI and other Oracle Linux 9 environments. If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
 
 ## Port Requirements
 
