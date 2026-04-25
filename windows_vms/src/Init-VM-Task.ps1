@@ -5,9 +5,43 @@
 # operations succeed even when no user is logged in.
 
 param(
-    # Retains the generated task action scripts and their input arguments on disk after execution
-    # to allow manual inspection and re-execution for troubleshooting purposes.
-    [switch]$KeepTaskActionScripts
+    [Parameter(Mandatory=$false)]
+    [string]$DomainName,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ActiveDirectoryCredential,
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$DnsServers,
+
+    [Parameter(Mandatory=$false)]
+    [string]$KasmHostname,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RegistrationToken,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ServerId,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ServerName,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_ProfileLocations,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_CloudCache,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_ProfileType,
+
+    [switch]$SkipStartAudioService,
+
+    [switch]$RenameComputer,
+
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $TaskName = "KasmStartupScript"
@@ -15,54 +49,52 @@ $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Import-Module $ScriptDirectory\Utils.psm1
 
 
-# Build a wrapper script that calls Init-VM.ps1 with the provided values
-$paramLines = @()
-$i = 0
-while ($i -lt $args.Count) {
-    $arg     = $args[$i]
-    $nextArg = if ($i + 1 -lt $args.Count) { $args[$i + 1] } else { $null }
-    $nextIsValue = $nextArg -and ($nextArg -notmatch '^-')
+$escapedDomainName               = $DomainName               -replace "'", "''"
+$escapedActiveDirectoryCredential = $ActiveDirectoryCredential -replace "'", "''"
+$escapedKasmHostname             = $KasmHostname             -replace "'", "''"
+$escapedRegistrationToken        = $RegistrationToken        -replace "'", "''"
+$escapedServerId                 = $ServerId                 -replace "'", "''"
+$escapedServerName               = $ServerName               -replace "'", "''"
+$escapedFSLogixProfileLocations  = $FSLogix_ProfileLocations  -replace "'", "''"
+$escapedFSLogixCloudCache        = $FSLogix_CloudCache        -replace "'", "''"
+$escapedFSLogixProfileType       = $FSLogix_ProfileType       -replace "'", "''"
 
-    if ($arg -match '^-(.+)$') {
-        $name = $Matches[1]
-        if ($nextIsValue) {
-            if ($nextArg -eq 'True') {
-                $paramLines += "    $name = `$true"
-                $i += 2
-            } elseif ($nextArg -eq 'False') {
-                $i += 2
-            } else {
-                $escaped = $nextArg -replace "'", "''"
-                $paramLines += "    $name = '$escaped'"
-                $i += 2
-            }
-        } else {
-            $paramLines += "    $name = `$true"
-            $i++
-        }
-    } else {
-        $i++
-    }
-}
+$dnsServersLiteral = if ($DnsServers) {
+    $items = $DnsServers | ForEach-Object { "'$($_ -replace "'", "''")'" }
+    "@($($items -join ', '))"
+} else { '@()' }
 
-if ($KeepTaskActionScripts) { $paramLines += "    KeepTaskActionScripts = `$true" }
+$skipAudioLiteral = if ($SkipStartAudioService) { '$true' } else { '$false' }
+$renameLiteral    = if ($RenameComputer)        { '$true' } else { '$false' }
+$keepLiteral      = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$verifyLiteral    = if ($VerifyKasmApiCert)     { '$true' } else { '$false' }
 
-$paramsBlock = $paramLines -join [Environment]::NewLine
-$keepTaskActionScriptsLiteral = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
 $WrapperPath = "$ScriptDirectory\Init-VM_TaskAction.ps1"
 Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
-`$keepTaskActionScripts = $keepTaskActionScriptsLiteral
+`$keepTaskActionScripts = $keepLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 `$params = @{
-$paramsBlock
+    DomainName                = '$escapedDomainName'
+    ActiveDirectoryCredential = '$escapedActiveDirectoryCredential'
+    DnsServers                = $dnsServersLiteral
+    KasmHostname              = '$escapedKasmHostname'
+    RegistrationToken         = '$escapedRegistrationToken'
+    ServerId                  = '$escapedServerId'
+    ServerName                = '$escapedServerName'
+    FSLogix_ProfileLocations  = '$escapedFSLogixProfileLocations'
+    FSLogix_CloudCache        = '$escapedFSLogixCloudCache'
+    FSLogix_ProfileType       = '$escapedFSLogixProfileType'
+    SkipStartAudioService     = $skipAudioLiteral
+    RenameComputer            = $renameLiteral
+    KeepTaskActionScripts     = $keepLiteral
+    VerifyKasmApiCert         = $verifyLiteral
 }
 try {
     & "`$ScriptDirectory\Init-VM.ps1" @params
 } catch {
     Write-Log "Failed to invoke Init-VM.ps1: `$_" -EntryType "Error"
-} finally {
-    if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 }
 "@
 
@@ -91,11 +123,6 @@ try {
 
 # Give it a moment to start
 Start-Sleep -Seconds 5
-
-$TaskResult = (Get-ScheduledTaskInfo -TaskName $TaskName).LastTaskResult
-if ($TaskResult -ne 0) {
-    Write-Log "Scheduled task exited with code $TaskResult" -EntryType "Error"
-}
 
 
 # Remove the task

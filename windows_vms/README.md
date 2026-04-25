@@ -185,6 +185,21 @@ The following actions are performed on every Instant Clone:
   -FSLogix_ProfileLocations "\\WIN-AD\FSLogixProfiles"
 ```
 
+## Security
+
+| Variable             | Required | Type   | Description                                                                                                                                                                                                                                                                                                           |
+|----------------------|----------|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $VerifyKasmApiCert   | Optional | switch | When present, enables TLS certificate verification for calls to the Kasm API. By default, certificate verification is disabled to accommodate self-signed certificates and IP address-based configurations common in internal deployments. Enable this in environments with a trusted CA-signed certificate and FQDN. |
+
+#### Example - Enable TLS Certificate Verification
+```powershell
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}" `
+  -VerifyKasmApiCert
+```
+
 ## Troubleshooting
 
 | Variable               | Required | Type   | Description                                                                                                                                      |

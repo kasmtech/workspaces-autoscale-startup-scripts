@@ -13,7 +13,9 @@ param(
     [string]$RegistrationToken,
 
     [Parameter(Mandatory=$false)]
-    [switch]$KeepTaskActionScripts
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $TaskName = "KasmDesktopServiceInstall"
@@ -24,16 +26,20 @@ $escapedHostname = $KasmHostname      -replace "'", "''"
 $escapedServerId = $ServerId          -replace "'", "''"
 $escapedToken    = $RegistrationToken -replace "'", "''"
 $keepLiteral     = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$verifyLiteral   = if ($VerifyKasmApiCert)    { '$true' } else { '$false' }
 
 $TaskActionPath = "$ScriptDirectory\Install-KasmDesktopService_TaskAction.ps1"
 Set-Content -Path $TaskActionPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
 `$keepTaskActionScripts = $keepLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+Set-LoggingProperties -KasmHostname '$escapedHostname' -Token '$escapedToken' -VerifyKasmApiCert:$verifyLiteral
+if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 `$params = @{
     KasmHostname      = '$escapedHostname'
     ServerId          = '$escapedServerId'
     RegistrationToken = '$escapedToken'
+    VerifyKasmApiCert = $verifyLiteral
 }
 try {
     & "`$ScriptDirectory\Install-KasmDesktopService.ps1" @params
@@ -41,7 +47,6 @@ try {
     Write-Log "Failed to invoke Install-KasmDesktopService.ps1: `$_" -EntryType "Error"
 } finally {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false -ErrorAction SilentlyContinue
-    if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 }
 "@
 
