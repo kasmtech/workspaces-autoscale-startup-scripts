@@ -33,6 +33,7 @@ Set-Content -Path $TaskActionPath -Encoding UTF8 -Value @"
 `$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
 `$keepTaskActionScripts = $keepLiteral
 Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+Set-LoggingProperties -KasmHostname '$escapedHostname' -Token '$escapedToken' -VerifyKasmApiCert:$verifyLiteral
 if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
 `$params = @{
     KasmHostname      = '$escapedHostname'
