@@ -31,7 +31,7 @@ Function Set-LoggingProperties {
 
     if ($null -eq $ServerName -or $ServerName -eq "") {
         # Set ServerName to computer name if not set
-        $script:ModuleServerName = $env:COMPUTERNAME
+        $script:ModuleServerName = (hostname).Trim()
     } else {
         $script:ModuleServerName = $ServerName
     }
