@@ -129,12 +129,12 @@ Function Send-KasmLog {
     } | ConvertTo-Json
 
     $sendScript = {
-        param($Url, $jsonBody, $skipCertCheck, $logFile, $maxRetries, $retryDelay, $psInstance)
+        param($Url, $jsonBody, $verifyCert, $logFile, $maxRetries, $retryDelay, $psInstance)
 
         Add-Type -AssemblyName System.Net.Http
 
         $handler = $null
-        if ($skipCertCheck) {
+        if (-not $verifyCert) {
             $handler = [System.Net.Http.HttpClientHandler]::new()
             $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
             $client = [System.Net.Http.HttpClient]::new($handler)
@@ -184,13 +184,13 @@ Function Send-KasmLog {
     $MaxRetries = 3
     $RetryDelay = 2
 
-    $ps.AddArgument($Url)                        | Out-Null
-    $ps.AddArgument($jsonBody)                   | Out-Null
-    $ps.AddArgument($script:ModuleSkipCertCheck) | Out-Null
-    $ps.AddArgument($KasmLogFile)                | Out-Null
-    $ps.AddArgument($MaxRetries)                 | Out-Null
-    $ps.AddArgument($RetryDelay)                 | Out-Null
-    $ps.AddArgument($ps)                         | Out-Null
+    $ps.AddArgument($Url)                            | Out-Null
+    $ps.AddArgument($jsonBody)                       | Out-Null
+    $ps.AddArgument($script:ModuleVerifyKasmApiCert) | Out-Null
+    $ps.AddArgument($KasmLogFile)                    | Out-Null
+    $ps.AddArgument($MaxRetries)                     | Out-Null
+    $ps.AddArgument($RetryDelay)                     | Out-Null
+    $ps.AddArgument($ps)                             | Out-Null
     $null = $ps.BeginInvoke()
 }
 
