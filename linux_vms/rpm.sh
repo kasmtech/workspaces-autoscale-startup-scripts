@@ -14,6 +14,12 @@ chmod 0600 "$LOG_FILE"
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+# Detect OS — used by install_epel and install_kasmvnc
+. /etc/os-release
+OS_ID="$ID"
+OS_MAJOR=$(echo "$VERSION_ID" | cut -d'.' -f1)
+echo "[INFO] Detected OS: $OS_ID $OS_MAJOR"
+
 configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
@@ -35,11 +41,35 @@ configure_iptables() {{
   fi
 }}
 
+install_epel() {{
+  echo "[INFO] Installing EPEL for $OS_ID $OS_MAJOR"
+  case "$OS_ID" in
+    ol)
+      dnf install -y oracle-epel-release-el${OS_MAJOR}
+      dnf config-manager --enable ol${OS_MAJOR}_developer_EPEL
+      ;;
+    rhel)
+      dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_MAJOR}.noarch.rpm"
+      # Enable CodeReady Linux Builder — required for some EPEL package dependencies on RHEL
+      if [ "$OS_MAJOR" -ge 9 ]; then
+        dnf config-manager --enable crb || true
+      else
+        dnf config-manager --enable powertools || true
+      fi
+      ;;
+    *)
+      echo "[ERROR] EPEL install not supported for OS: $OS_ID" >&2
+      return 1
+      ;;
+  esac
+}}
+
 install_xfce() {{
-  if [ "$ENABLE_EPEL" -eq 1 ]; then
-    echo "[INFO] Enabling EPEL for Xfce packages"
-    dnf install -y oracle-epel-release-el9
-    dnf config-manager --enable ol9_developer_EPEL
+  if ! dnf group info "Xfce" &>/dev/null; then
+    if [ "$ENABLE_EPEL" -eq 0 ]; then
+      echo "[ERROR] Xfce group is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
+      return 1
+    fi
   fi
   dnf groupinstall -y "Xfce"
   dnf install -y \
@@ -52,7 +82,7 @@ install_xfce() {{
     xorg-x11-server-Xorg
 }}
 
-# Optional:  screenshot tooling
+# Optional: screenshot tooling
 install_screenshot_tools() {{
   if dnf install -y gnome-screenshot; then
     echo "[INFO] gnome-screenshot installed successfully"
@@ -66,10 +96,20 @@ install_kasmvnc() {{
 
   KASM_VNC_PATH=/usr/share/kasmvnc
   ARCH=$(uname -m)
+
+  case "$OS_ID-$OS_MAJOR" in
+    ol-9|rhel-9)   KASMVNC_DISTRO="oracle_9" ;;
+    ol-8|rhel-8)   KASMVNC_DISTRO="oracle_8" ;;
+    *)
+      echo "[ERROR] KasmVNC: unsupported distro $OS_ID $OS_MAJOR" >&2
+      return 1
+      ;;
+  esac
+
   if [[ "$ARCH" == "x86_64" ]]; then
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_oracle_9_1.4.0_x86_64.rpm"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_x86_64.rpm"
   else
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_oracle_9_1.4.0_aarch64.rpm"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_aarch64.rpm"
   fi
 
   KASM_VNC_PASSWD="{connection_password}"
@@ -101,16 +141,6 @@ install_kasmvnc() {{
   usermod -aG ssl-cert $KASM_VNC_USER || true
 
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}}
-
-install_tigervnc (){{
-  dnf install -y tigervnc-server
-  mkdir /home/opc/.vnc
-  echo "{connection_password}" | vncpasswd -f > /home/opc/.vnc/passwd
-  echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/opc/.vnc/xstartup
-  chown -R opc:opc /home/opc/.vnc
-  chmod 0600 /home/opc/.vnc/passwd
-  su -l -c 'vncserver -localhost no' opc
 }}
 
 install_xrdp() {{
@@ -222,8 +252,7 @@ install_kds() {{
 sleep 5
 
 if [ "$ENABLE_EPEL" -eq 1 ]; then
-  dnf install -y oracle-epel-release-el9
-  dnf config-manager --enable ol9_developer_EPEL
+  install_epel
 fi
 
 install_xfce
@@ -231,7 +260,6 @@ install_screenshot_tools
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
-  #install_tigervnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then

@@ -14,6 +14,12 @@ chmod 0600 "$LOG_FILE"
 echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+# Detect OS — used by install_kasmvnc to select the right package
+. /etc/os-release
+OS_ID="$ID"
+OS_CODENAME="$VERSION_CODENAME"
+echo "[INFO] Detected OS: $OS_ID $OS_CODENAME"
+
 configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
@@ -58,10 +64,21 @@ install_kasmvnc (){{
   KASM_VNC_PATH=/usr/share/kasmvnc
   ARCH=$(uname -m)
 
+  case "$OS_CODENAME" in
+    jammy)    KASMVNC_DISTRO="jammy" ;;    # Ubuntu 22.04
+    noble)    KASMVNC_DISTRO="noble" ;;    # Ubuntu 24.04
+    bullseye) KASMVNC_DISTRO="bullseye" ;; # Debian 11
+    bookworm) KASMVNC_DISTRO="bookworm" ;; # Debian 12
+    *)
+      echo "[ERROR] KasmVNC: unsupported distro $OS_ID $OS_CODENAME" >&2
+      return 1
+      ;;
+  esac
+
   if [[ "$ARCH" == "x86_64" ]]; then
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_jammy_1.4.0_amd64.deb"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_amd64.deb"
   else
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_jammy_1.4.0_arm64.deb"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_arm64.deb"
   fi
 
   KASM_VNC_PASSWD="{connection_password}"
@@ -81,16 +98,6 @@ install_kasmvnc (){{
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
   addgroup $KASM_VNC_USER ssl-cert
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}}
-
-install_tigervnc (){{
-  apt-get install -y tigervnc-standalone-server
-  mkdir /home/ubuntu/.vnc
-  echo "{connection_password}" | vncpasswd -f > /home/ubuntu/.vnc/passwd
-  echo -e "#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4" >> /home/ubuntu/.vnc/xstartup
-  chown -R ubuntu:ubuntu /home/ubuntu/.vnc
-  chmod 0600 /home/ubuntu/.vnc/passwd
-  su -l -c 'vncserver -localhost no' ubuntu
 }}
 
 install_xrdp () {{
@@ -200,7 +207,6 @@ install_xfce
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
   install_kasmvnc
-  # install_tigervnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then

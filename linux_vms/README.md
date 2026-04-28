@@ -24,31 +24,54 @@ echo "${{VARIABLE}}"
 
 ## Examples
 
-### Ubuntu — [ubuntu.sh](./ubuntu.sh)
+### Debian / Ubuntu — [deb.sh](./deb.sh)
 
-Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC on an Ubuntu VM. Configure which components are installed by setting the flags at the top of the script:
+Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the distro at runtime from `/etc/os-release` and selects the correct KasmVNC package automatically.
+
+**Supported distros:**
+
+| Distro | Version |
+|--------|---------|
+| Ubuntu | 22.04 (Jammy), 24.04 (Noble) |
+| Debian | 11 (Bullseye), 12 (Bookworm) |
+
+**Configuration flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `ENABLE_KASMVNC` | `1` | Install and configure KasmVNC |
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
-| `ENABLE_IPTABLES` | `0` | Open required firewall ports via UFW (preferred) or iptables |
+| `ENABLE_IPTABLES` | `0` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
 
-### Oracle Linux 9 — [oracle_9.sh](./oracle_9.sh)
+### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
 
-Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC on an Oracle Linux 9 VM. Configure which components are installed by setting the flags at the top of the script:
+Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script detects the distro at runtime from `/etc/os-release` and selects the correct KasmVNC package and EPEL installation method automatically.
+
+**Supported distros:**
+
+| Distro | Version |
+|--------|---------|
+| Oracle Linux | 8, 9 |
+| RHEL | 8, 9 |
+
+**Configuration flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `ENABLE_KASMVNC` | `0` | Install and configure KasmVNC |
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
-| `ENABLE_EPEL` | `1` | Enable the EPEL repository before installing packages. Required on Oracle Linux 9 for xrdp and Xfce. |
+| `ENABLE_EPEL` | `1` | Enable the EPEL repository before installing packages. Required for Xfce and xrdp on Oracle Linux and RHEL. |
 | `ENABLE_IPTABLES` | `0` | Open required firewall ports via firewalld (preferred) or iptables |
 
-#### EPEL on Oracle Linux 9
-Xfce and xrdp are not included in Oracle Linux 9's default repositories, so `ENABLE_EPEL=1` is the default to ensure the script works out of the box on OCI and other Oracle Linux 9 environments. If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
+#### EPEL on Oracle Linux and RHEL
+Xfce and xrdp are not included in the default repositories for Oracle Linux or RHEL. `ENABLE_EPEL=1` is the default so the script works out of the box. The EPEL setup is distro-aware:
+
+- **Oracle Linux:** installs `oracle-epel-release-el{8,9}` and enables `ol{8,9}_developer_EPEL`
+- **RHEL:** installs EPEL from `dl.fedoraproject.org` and enables CodeReady Linux Builder (CRB / powertools), which is required for some EPEL package dependencies
+
+If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
 
 ## Port Requirements
 
@@ -57,7 +80,7 @@ When using these autoscale configurations:
 - The Kasm Desktop Service requires TCP port **4902** to be open so the service can communicate with the Kasm API for registration and keepalive checks.
 - KasmVNC requires TCP port **5902** to be open for browser-based VNC connections.
 
-Set `ENABLE_IPTABLES=1` to have the script open only the ports corresponding to the enabled services. On Ubuntu, UFW is used if active, falling back to raw iptables. On Oracle Linux 9, firewalld is used if active, falling back to iptables-services.
+Set `ENABLE_IPTABLES=1` to have the script open only the ports corresponding to the enabled services. On Debian/Ubuntu, UFW is used if active, falling back to raw iptables. On Oracle Linux/RHEL, firewalld is used if active, falling back to iptables-services.
 
 If you manage firewall rules outside the script, leave `ENABLE_IPTABLES=0` (the default).
 
