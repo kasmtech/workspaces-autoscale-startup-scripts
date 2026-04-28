@@ -96,7 +96,7 @@ install_kasmvnc (){{
   chown -R 1000:0 $KASM_VNC_PATH/www/Downloads
   echo -e "$KASM_VNC_PASSWD\n$KASM_VNC_PASSWD\n" | kasmvncpasswd -u $KASM_VNC_USER -w "/home/$KASM_VNC_USER/.kasmpasswd"
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
-  addgroup $KASM_VNC_USER ssl-cert
+  usermod -aG ssl-cert $KASM_VNC_USER || true
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
 }}
 
