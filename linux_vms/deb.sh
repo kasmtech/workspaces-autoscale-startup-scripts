@@ -2,10 +2,10 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-ENABLE_KASMVNC=1
+ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
-ENABLE_IPTABLES=0
+ENABLE_IPTABLES=1
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -76,9 +76,9 @@ install_kasmvnc (){{
   esac
 
   if [[ "$ARCH" == "x86_64" ]]; then
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_amd64.deb"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${{KASMVNC_DISTRO}}_1.4.0_amd64.deb"
   else
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_arm64.deb"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${{KASMVNC_DISTRO}}_1.4.0_arm64.deb"
   fi
 
   KASM_VNC_PASSWD="{connection_password}"

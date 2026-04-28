@@ -5,7 +5,7 @@ ENABLE_KASMVNC=0
 ENABLE_XRDP=1
 ENABLE_KDS=1
 ENABLE_EPEL=1
-ENABLE_IPTABLES=0
+ENABLE_IPTABLES=1
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -45,11 +45,11 @@ install_epel() {{
   echo "[INFO] Installing EPEL for $OS_ID $OS_MAJOR"
   case "$OS_ID" in
     ol)
-      dnf install -y oracle-epel-release-el${OS_MAJOR}
-      dnf config-manager --enable ol${OS_MAJOR}_developer_EPEL
+      dnf install -y oracle-epel-release-el${{OS_MAJOR}}
+      dnf config-manager --enable ol${{OS_MAJOR}}_developer_EPEL
       ;;
     rhel)
-      dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_MAJOR}.noarch.rpm"
+      dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${{OS_MAJOR}}.noarch.rpm"
       # Enable CodeReady Linux Builder — required for some EPEL package dependencies on RHEL
       if [ "$OS_MAJOR" -ge 9 ]; then
         dnf config-manager --enable crb || true
@@ -107,9 +107,9 @@ install_kasmvnc() {{
   esac
 
   if [[ "$ARCH" == "x86_64" ]]; then
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_x86_64.rpm"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${{KASMVNC_DISTRO}}_1.4.0_x86_64.rpm"
   else
-    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${KASMVNC_DISTRO}_1.4.0_aarch64.rpm"
+    BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${{KASMVNC_DISTRO}}_1.4.0_aarch64.rpm"
   fi
 
   KASM_VNC_PASSWD="{connection_password}"
