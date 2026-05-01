@@ -226,7 +226,7 @@ install_kds() {{
 
   [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
-  SKIP_KASM_REGISTRATION=1 dnf install -y ./kasm-desktop-service.rpm
+  dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
 
   sleep 2
