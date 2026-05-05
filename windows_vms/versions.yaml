@@ -11,9 +11,9 @@
 
 version: 2.0.0
 kasmDesktopService:
-  version: develop
-  installer: kasm_windows_service_installer_x86_64_{{ kasmDesktopService.version }}.exe
-  downloadUrl: https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/{{ kasmDesktopService.installer }}
+  version: feature_KASM-8210_bump_dep_versions_for_1_19_0_a19f503d4
+  installer: kasm_agent_installer_win10_x86_64_{{ kasmDesktopService.version }}.exe
+  downloadUrl: https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/a19f503d4c6e36fbaf689044e6e43fdcd950210d/{{ kasmDesktopService.installer }}
 winFsp:
   version: 2.0.23075
   installer: winfsp-{{ winFsp.version }}.msi
