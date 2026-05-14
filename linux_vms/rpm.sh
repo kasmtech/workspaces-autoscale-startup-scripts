@@ -43,6 +43,8 @@ configure_iptables() {{
 
 install_epel() {{
   echo "[INFO] Installing EPEL for $OS_ID $OS_MAJOR"
+  # dnf config-manager requires dnf-plugins-core; absent on minimal installs
+  dnf install -y dnf-plugins-core
   case "$OS_ID" in
     ol)
       dnf install -y oracle-epel-release-el${{OS_MAJOR}}
@@ -97,6 +99,7 @@ install_kasmvnc() {{
   KASM_VNC_PATH=/usr/share/kasmvnc
   ARCH=$(uname -m)
 
+  # RHEL and OL share binary-compatible RPMs; KasmVNC ships one Oracle build per major version
   case "$OS_ID-$OS_MAJOR" in
     ol-9|rhel-9)   KASMVNC_DISTRO="oracle_9" ;;
     ol-8|rhel-8)   KASMVNC_DISTRO="oracle_8" ;;

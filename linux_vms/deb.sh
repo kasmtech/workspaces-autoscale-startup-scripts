@@ -42,14 +42,14 @@ configure_iptables() {{
 }}
 
 apt_wait () {{
-  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+  while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
-  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
+  while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
     sleep 1
   done
   if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
-    while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
+    while fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
       sleep 1
     done
   fi
@@ -118,8 +118,7 @@ install_xrdp () {{
 unset DBUS_SESSION_BUS_ADDRESS
 unset WAYLAND_DISPLAY
 export XDG_SESSION_TYPE=x11
-export \$(dbus-launch)
-xfce4-session
+exec dbus-launch --exit-with-session xfce4-session
 EOF'
   chmod +x /etc/xrdp/startwm.sh
 
