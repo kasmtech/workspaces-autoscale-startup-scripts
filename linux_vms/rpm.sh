@@ -224,8 +224,6 @@ install_kds() {{
   cd /tmp
   wget "$KDS_RPM_URL" -O kasm-desktop-service.rpm
 
-  [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
-
   dnf install -y ./kasm-desktop-service.rpm
   rm -f kasm-desktop-service.rpm
 
@@ -250,6 +248,9 @@ install_kds() {{
 }}
 
 sleep 5
+
+[ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
+
 
 if [ "$ENABLE_EPEL" -eq 1 ]; then
   install_epel

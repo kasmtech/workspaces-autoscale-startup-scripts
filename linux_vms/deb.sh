@@ -173,8 +173,6 @@ install_kds () {{
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
 
-  [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
-
   apt-get install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
@@ -203,6 +201,8 @@ sleep 10
 apt_wait
 apt-get update
 
+[ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
+
 install_xfce
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
@@ -217,4 +217,4 @@ if [ "$ENABLE_KDS" -eq 1 ]; then
   install_kds
 fi
 
-echo "===== KASM INSTALL COMPLETED $(date) ====="
+echo "===== KASM DEB INSTALL COMPLETED $(date) ====="
