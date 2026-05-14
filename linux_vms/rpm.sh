@@ -141,7 +141,7 @@ install_kasmvnc() {{
     kasmvncpasswd -u $KASM_VNC_USER -w "/home/$KASM_VNC_USER/.kasmpasswd"
 
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
-  usermod -aG ssl-cert $KASM_VNC_USER || true
+  getent group ssl-cert >/dev/null 2>&1 && usermod -aG ssl-cert "$KASM_VNC_USER" || true
 
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
 }}
@@ -252,6 +252,9 @@ install_kds() {{
 
 sleep 5
 
+dnf install -y wget
+
+# iptables-services is in base/appstream repos, so firewall setup runs before EPEL is configured
 [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
 
