@@ -196,6 +196,7 @@ apt_wait
 sleep 10
 apt_wait
 apt-get update
+apt-get install -y wget
 
 [ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
 
