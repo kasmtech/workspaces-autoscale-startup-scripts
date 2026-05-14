@@ -28,16 +28,13 @@ configure_iptables() {{
     [ "$ENABLE_KDS"     -eq 1 ] && ufw allow 4902/tcp
     [ "$ENABLE_KASMVNC" -eq 1 ] && ufw allow 5902/tcp
   else
+    apt-get install -y iptables netfilter-persistent
+
     [ "$ENABLE_XRDP"    -eq 1 ] && iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
     [ "$ENABLE_KDS"     -eq 1 ] && iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
     [ "$ENABLE_KASMVNC" -eq 1 ] && iptables -I INPUT -p tcp --dport 5902 -j ACCEPT
 
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-      netfilter-persistent save
-    else
-      apt-get install -y netfilter-persistent
-      netfilter-persistent save
-    fi
+    netfilter-persistent save
   fi
 }}
 
@@ -103,7 +100,7 @@ install_kasmvnc (){{
 install_xrdp () {{
   apt-get install -y xrdp dbus-x11 xorg x11-xserver-utils
 
-  adduser xrdp ssl-cert || true
+  usermod -aG ssl-cert xrdp || true
   systemctl enable xrdp
   systemctl restart xrdp
 
