@@ -42,7 +42,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 | `ENABLE_KASMVNC` | `1` | Install and configure KasmVNC |
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
-| `ENABLE_IPTABLES` | `0` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
+| `ENABLE_IPTABLES` | `1` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
 
 ### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
 
@@ -63,7 +63,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script de
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
 | `ENABLE_EPEL` | `1` | Enable the EPEL repository before installing packages. Required for Xfce and xrdp on Oracle Linux and RHEL. |
-| `ENABLE_IPTABLES` | `0` | Open required firewall ports via firewalld (preferred) or iptables |
+| `ENABLE_IPTABLES` | `1` | Open required firewall ports via firewalld (preferred) or iptables |
 
 #### EPEL on Oracle Linux and RHEL
 Xfce and xrdp are not included in the default repositories for Oracle Linux or RHEL. `ENABLE_EPEL=1` is the default so the script works out of the box. The EPEL setup is distro-aware:

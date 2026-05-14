@@ -215,7 +215,7 @@ EOF'
 install_kds() {{
 
   ARCH=$(uname -m)
-  if [ "$ARCH" = "x86_64" ]; then
+  if [[ "$ARCH" == "x86_64" ]]; then
     KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.rpm"
   else
     KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.rpm"
