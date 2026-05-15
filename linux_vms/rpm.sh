@@ -24,6 +24,10 @@ configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet firewalld; then
+    for i in 1 2 3 4 5; do
+      firewall-cmd --state >/dev/null 2>&1 && break
+      sleep 3
+    done
     [ "$ENABLE_XRDP"    -eq 1 ] && firewall-cmd --add-port=3389/tcp --permanent
     [ "$ENABLE_KDS"     -eq 1 ] && firewall-cmd --add-port=4902/tcp --permanent
     [ "$ENABLE_KASMVNC" -eq 1 ] && firewall-cmd --add-port=5902/tcp --permanent

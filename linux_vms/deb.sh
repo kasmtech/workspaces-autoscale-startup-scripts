@@ -24,6 +24,10 @@ configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet ufw; then
+    for i in 1 2 3 4 5; do
+      ufw status >/dev/null 2>&1 && break
+      sleep 3
+    done
     [ "$ENABLE_XRDP"    -eq 1 ] && ufw allow 3389/tcp
     [ "$ENABLE_KDS"     -eq 1 ] && ufw allow 4902/tcp
     [ "$ENABLE_KASMVNC" -eq 1 ] && ufw allow 5902/tcp
