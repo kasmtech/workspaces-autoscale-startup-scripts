@@ -33,6 +33,8 @@ param(
 
     [switch]$SkipStartAudioService,
 
+    [switch]$SkipDisableNetBios,
+
     [switch]$RenameComputer,
 
     [switch]$KeepTaskActionScripts,
@@ -174,7 +176,7 @@ Write-Log "VM initialization script started"
 $DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
 $DoRenameComputer = Get-DoComputerRename
 
-& $InstantCloneScript -ComputerRename $DoRenameComputer -DomainJoin $DoJoinDomain
+& $InstantCloneScript -ComputerRename $DoRenameComputer -DomainJoin $DoJoinDomain -SkipDisableNetBios:$SkipDisableNetBios
 
 if ($DoJoinDomain) {
     Invoke-DesktopServiceScript

@@ -37,6 +37,8 @@ param(
 
     [switch]$SkipStartAudioService,
 
+    [switch]$SkipDisableNetBios,
+
     [switch]$RenameComputer,
 
     [switch]$KeepTaskActionScripts,
@@ -64,10 +66,11 @@ $dnsServersLiteral = if ($DnsServers) {
     "@($($items -join ', '))"
 } else { '@()' }
 
-$skipAudioLiteral = if ($SkipStartAudioService) { '$true' } else { '$false' }
-$renameLiteral    = if ($RenameComputer)        { '$true' } else { '$false' }
-$keepLiteral      = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
-$verifyLiteral    = if ($VerifyKasmApiCert)     { '$true' } else { '$false' }
+$skipAudioLiteral   = if ($SkipStartAudioService) { '$true' } else { '$false' }
+$skipNetBiosLiteral = if ($SkipDisableNetBios)    { '$true' } else { '$false' }
+$renameLiteral      = if ($RenameComputer)        { '$true' } else { '$false' }
+$keepLiteral        = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$verifyLiteral      = if ($VerifyKasmApiCert)     { '$true' } else { '$false' }
 
 $WrapperPath = "$ScriptDirectory\Init-VM_TaskAction.ps1"
 Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
@@ -87,6 +90,7 @@ if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definit
     FSLogix_CloudCache        = '$escapedFSLogixCloudCache'
     FSLogix_ProfileType       = '$escapedFSLogixProfileType'
     SkipStartAudioService     = $skipAudioLiteral
+    SkipDisableNetBios        = $skipNetBiosLiteral
     RenameComputer            = $renameLiteral
     KeepTaskActionScripts     = $keepLiteral
     VerifyKasmApiCert         = $verifyLiteral
