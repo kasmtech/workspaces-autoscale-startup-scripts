@@ -39,7 +39,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_KASMVNC` | `1` | Install and configure KasmVNC |
+| `ENABLE_KASMVNC` | `0` | Install and configure KasmVNC |
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
@@ -82,7 +82,7 @@ When using these autoscale configurations:
 
 Set `ENABLE_IPTABLES=1` to have the script open only the ports corresponding to the enabled services. On Debian/Ubuntu, UFW is used if active, falling back to raw iptables. On Oracle Linux/RHEL, firewalld is used if active, falling back to iptables-services.
 
-If you manage firewall rules outside the script, leave `ENABLE_IPTABLES=0` (the default).
+If you manage firewall rules outside the script, change `ENABLE_IPTABLES=0`.
 
 ## Logging
 
