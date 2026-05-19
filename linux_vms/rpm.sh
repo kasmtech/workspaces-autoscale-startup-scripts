@@ -6,6 +6,14 @@ ENABLE_XRDP=1
 ENABLE_KDS=1
 ENABLE_EPEL=1
 ENABLE_IPTABLES=1
+ENABLE_AD_JOIN=0
+
+# Provided by Kasm autoscale (only used when ENABLE_AD_JOIN=1)
+AD_DOMAIN="{domain}"
+AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password for the machine account
+
+# REQUIRED when ENABLE_AD_JOIN=1: set to your AD DNS server (Domain Controller IP)
+AD_DNS_SERVER=""                            # e.g. "192.168.100.6"
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -99,6 +107,7 @@ install_xfce() {{
     dbus-x11 \
     xorg-x11-xauth \
     xorg-x11-server-Xorg
+  systemctl set-default graphical.target
 }}
 
 # Optional: screenshot tooling
@@ -269,6 +278,96 @@ install_kds() {{
   systemctl restart kasm-desktop.service || systemctl start kasm-desktop.service
 }}
 
+install_ad_dependencies() {{
+  echo "[INFO] Installing AD dependencies"
+  dnf install -y \
+    realmd sssd sssd-tools adcli \
+    oddjob oddjob-mkhomedir \
+    samba-common-tools \
+    bind-utils
+}}
+
+configure_dns_for_ad() {{
+  if [ -z "$AD_DNS_SERVER" ]; then
+    echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
+    return
+  fi
+  echo "[INFO] Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
+  NIC=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2 == "ethernet" {{print $1}}' | head -1)
+  if [ -z "$NIC" ]; then
+    echo "[ERROR] No ethernet connection found via nmcli" >&2
+    exit 1
+  fi
+  echo "[INFO] Updating connection: $NIC"
+  nmcli connection modify "$NIC" ipv4.dns "$AD_DNS_SERVER"
+  nmcli connection reload
+  nmcli connection up "$NIC" || true
+}}
+
+sync_time() {{
+  echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
+  chronyc makestep 2>/dev/null || true
+}}
+
+test_domain_resolution() {{
+  echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
+  dig +short "$AD_DOMAIN" | grep -q '.' || {{
+    echo "[ERROR] Domain $AD_DOMAIN not resolvable — check AD_DNS_SERVER" >&2
+    exit 1
+  }}
+  dig +short "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
+    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN" >&2
+    exit 1
+  }}
+  realm discover "$AD_DOMAIN" >/dev/null || {{
+    echo "[ERROR] realm discovery failed for $AD_DOMAIN" >&2
+    exit 1
+  }}
+  echo "[INFO] Domain resolution successful"
+}}
+
+join_domain() {{
+  echo "[INFO] Joining domain $AD_DOMAIN via one-time password"
+  realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
+    echo "[ERROR] Domain join failed" >&2
+    exit 1
+  }}
+  echo "[INFO] Domain join successful"
+}}
+
+enable_homedir_creation() {{
+  echo "[INFO] Configuring sssd and home directory creation"
+  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
+    echo "ad_gpo_map_remote_interactive = +xrdp-sesman" >> /etc/sssd/sssd.conf
+  fi
+  authselect select sssd with-mkhomedir --force || true
+  systemctl enable --now oddjobd
+  systemctl enable sssd
+  systemctl restart sssd
+}}
+
+kasm_checkin() {{
+  echo "[INFO] Signaling Kasm server ready"
+  curl -k -X POST \
+    -H "Content-Type: application/json" \
+    -d '{{"status": "running", "status_message": "Startup complete", "status_progress": "100"}}' \
+    "https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}" || true
+}}
+
+install_ad_join() {{
+  if realm list 2>/dev/null | grep -qi "$AD_DOMAIN"; then
+    echo "[INFO] Already joined to $AD_DOMAIN, skipping"
+    return
+  fi
+  install_ad_dependencies
+  configure_dns_for_ad
+  sync_time
+  test_domain_resolution
+  join_domain
+  enable_homedir_creation
+  echo "[INFO] AD join complete"
+}}
+
 sleep 5
 
 dnf install -y wget
@@ -293,8 +392,18 @@ if [ "$ENABLE_XRDP" -eq 1 ]; then
   install_xrdp
 fi
 
+if [ "$ENABLE_AD_JOIN" -eq 1 ]; then
+  install_ad_join
+fi
+
 if [ "$ENABLE_KDS" -eq 1 ]; then
   install_kds
+fi
+
+# When KDS is not installed, signal Kasm directly that the server is ready.
+# KDS handles its own checkin via register_wizard.sh when ENABLE_KDS=1.
+if [ "$ENABLE_KDS" -eq 0 ]; then
+  kasm_checkin
 fi
 
 echo "===== KASM RPM INSTALL COMPLETED $(date) ====="

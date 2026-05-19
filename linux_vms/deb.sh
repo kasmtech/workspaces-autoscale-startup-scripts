@@ -8,12 +8,12 @@ ENABLE_KDS=1
 ENABLE_IPTABLES=1
 ENABLE_AD_JOIN=1
 
-# provided by Kasm workspace
+# Provided by Kasm autoscale
 AD_DOMAIN="{domain}"
-AD_JOIN_PASSWORD="{ad_join_credential}"     # only a password from Kasm
-# NOTE: On Linux, Kasm only provides {ad_join_credential} (password only, no username variable).
-# Either set AD_JOIN_USER to a delegated join account, or switch to one-time-password method (see below).
-AD_JOIN_USER="Administrator"            # REQUIRED: change to your delegated join account
+AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password for the machine account
+
+# REQUIRED: set to your AD DNS server (Domain Controller IP) so the VM can resolve AD SRV records
+AD_DNS_SERVER=""                            # e.g. "192.168.100.6"
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -227,128 +227,78 @@ install_ad_dependencies() {{
     samba-common-bin dnsutils
 }}
 
-cleanup() {{
-  restore_dns || true
-}}
-trap cleanup EXIT
-
-backup_dns() {{
-  if [ -e /etc/resolv.conf ]; then
-    cp -L /etc/resolv.conf /etc/resolv.conf.pre-ad
-  fi
-}}
-
 configure_dns_for_ad() {{
-  echo "[INFO] Temporarily overriding DNS for AD join"
-
-  systemctl disable systemd-resolved --now || true
-  rm -f /etc/resolv.conf
-
-  cat >/etc/resolv.conf <<EOF
-nameserver $DC_IP
-search $AD_DOMAIN
+  if [ -z "$AD_DNS_SERVER" ]; then
+    echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
+    return
+  fi
+  echo "[INFO] Configuring DNS for AD: $AD_DNS_SERVER"
+  mkdir -p /etc/systemd/resolved.conf.d
+  cat >/etc/systemd/resolved.conf.d/kasm-ad.conf <<EOF
+[Resolve]
+DNS=$AD_DNS_SERVER
+Domains=~$AD_DOMAIN
 EOF
+  systemctl restart systemd-resolved
 }}
 
-restore_dns() {{
-  if [ -f /etc/resolv.conf.pre-ad ]; then
-    echo "[INFO] Restoring original DNS configuration"
-    rm -f /etc/resolv.conf
-    mv /etc/resolv.conf.pre-ad /etc/resolv.conf
-    systemctl enable systemd-resolved --now || true
-  fi
+sync_time() {{
+  echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
+  chronyc makestep 2>/dev/null || ntpdate -u pool.ntp.org 2>/dev/null || true
 }}
 
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
-
   if [ -z "$(dig +short "$AD_DOMAIN" | head -n1)" ]; then
-    echo "[ERROR] Domain $AD_DOMAIN not resolvable"
+    echo "[ERROR] Domain $AD_DOMAIN not resolvable — check AD_DNS_SERVER"
     exit 1
   fi
-
   realm discover "$AD_DOMAIN" >/dev/null || {{
     echo "[ERROR] realm discovery failed for $AD_DOMAIN"
     exit 1
   }}
-
   echo "[INFO] Domain resolution successful"
 }}
 
-discover_dc() {{
-  # Sets DC_HOST and DC_IP as globals used by configure_dns_for_ad and sync_time
-  echo "[INFO] Discovering DC via DNS SRV"
-  DC_HOST=$(dig +short _kerberos._tcp."$AD_DOMAIN" SRV | awk '{print $4}' | head -n1 | sed 's/\.$//')
-  if [ -z "$DC_HOST" ]; then
-    echo "[ERROR] Unable to discover DC hostname"
-    exit 1
-  fi
-  DC_IP=$(getent hosts "$DC_HOST" | awk '{print $1}' | head -n1)
-  if [ -z "$DC_IP" ]; then
-    echo "[ERROR] Unable to resolve DC IP"
-    exit 1
-  fi
-  echo "[INFO] Using DC $DC_HOST ($DC_IP)"
-}}
-
-sync_time() {{
-  echo "[INFO] Syncing time with DC"
-  apt-get install -y ntpdate || true
-  ntpdate "$DC_IP" || true
-}}
-
 join_domain() {{
-  # Option A (current): username + password join — requires AD_JOIN_USER to be set above
-  # Option B (recommended if using Kasm one-time-password): uncomment below and remove Option A
-
-  # realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
-  #   echo "[ERROR] Domain join failed"
-  #   exit 1
-  # }}
-
-  echo "$AD_JOIN_PASSWORD" | realm join "$AD_DOMAIN" \
-    --user="$AD_JOIN_USER" \
-    --membership-software=adcli \
-    --unattended || {{
-      echo "[ERROR] Domain join failed"
-      exit 1
-    }}
-
+  echo "[INFO] Joining domain $AD_DOMAIN via one-time password"
+  realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
+    echo "[ERROR] Domain join failed"
+    exit 1
+  }}
   echo "[INFO] Domain join successful"
 }}
 
 enable_homedir_creation() {{
   echo "[INFO] Configuring sssd for xrdp GPO compatibility"
-
-  # Required for domain users to authenticate via xrdp when AD GPOs are enforced
-  # See: https://wiki.ubuntu.com/Enterprise/Authentication/sssd
   if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
     echo "ad_gpo_map_remote_interactive = +xrdp-sesman" >> /etc/sssd/sssd.conf
   fi
-
   pam-auth-update --enable mkhomedir || true
   systemctl enable sssd
   systemctl restart sssd
 }}
 
-install_ad_join()
-{{
+kasm_checkin() {{
+  echo "[INFO] Signaling Kasm server ready"
+  curl -k -X POST \
+    -H "Content-Type: application/json" \
+    -d '{{"status": "running", "status_message": "Startup complete", "status_progress": "100"}}' \
+    "https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}" || true
+}}
 
-  if realm list | grep -qi "$AD_DOMAIN"; then
-    echo "[INFO] Already joined to $AD_DOMAIN, skipping AD join"
+install_ad_join() {{
+  if realm list 2>/dev/null | grep -qi "$AD_DOMAIN"; then
+    echo "[INFO] Already joined to $AD_DOMAIN, skipping"
     return
   fi
   install_ad_dependencies
-  discover_dc  # uses original DNS to find DC_IP
-  backup_dns
   configure_dns_for_ad
   sync_time
   test_domain_resolution
   join_domain
-  restore_dns
   enable_homedir_creation
-
-  echo "[INFO] AD Join complete"
+  echo "[INFO] AD join complete"
 }}
 
 apt_wait
@@ -377,6 +327,12 @@ fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
   install_kds
+fi
+
+# When KDS is not installed, signal Kasm directly that the server is ready.
+# KDS handles its own checkin via register_wizard.sh when ENABLE_KDS=1.
+if [ "$ENABLE_KDS" -eq 0 ]; then
+  kasm_checkin
 fi
 
 echo "===== KASM DEB INSTALL COMPLETED $(date) ====="

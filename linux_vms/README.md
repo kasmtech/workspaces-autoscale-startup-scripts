@@ -14,8 +14,8 @@ Kasm replaces variables in the script that are wrapped in curly brackets, such a
 | upstream_auth_address      | The resolvable hostname, IP, or FQDN of the KASM API server. The token `{upstream_auth_address}` will be replaced with the value of "Zone" > "Upstream Auth Address" from the autoscale configuration's zone. |
 | checkin_jwt        | The registration token (JWT) created by Kasm for the newly created server. The token `{checkin_jwt}` will be replaced with a Kasm-generated registration token that is valid for 4 hours. |                                                                                                                                                                
 
-**NOTE: Important (Linux difference vs Windows)**
-On Linux, Kasm does not provide an AD join username variable. Only the password ({ad_join_credential}) is provided. The join username must be defined in the script (typically Administrator or a delegated join account).
+**NOTE: Linux AD join uses one-time password, not username**
+On Linux, Kasm pre-creates the machine account in AD and provides a one-time join password via `{ad_join_credential}`. The scripts use `realm join --one-time-password` with this value. No AD username is required.
 
 ### Escaping Brackets
 If your script uses curly brackets, aside from Kasm variables, you must escape them by doubling them up. Here is an example.
@@ -46,6 +46,15 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
+| `ENABLE_AD_JOIN` | `1` | Join the VM to an Active Directory domain |
+
+**AD join variables (when `ENABLE_AD_JOIN=1`):**
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `AD_DOMAIN` | Kasm `{domain}` | The AD domain to join (e.g. `corp.example.com`) |
+| `AD_JOIN_PASSWORD` | Kasm `{ad_join_credential}` | One-time machine account password created by Kasm |
+| `AD_DNS_SERVER` | **Admin must set** | IP address of the Domain Controller / AD DNS server (e.g. `192.168.1.10`). Required for Kerberos SRV record resolution. |
 
 ### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
 
@@ -67,6 +76,9 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script de
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
 | `ENABLE_EPEL` | `1` | Enable the EPEL repository before installing packages. Required for Xfce and xrdp on Oracle Linux and RHEL. |
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via firewalld (preferred) or iptables |
+| `ENABLE_AD_JOIN` | `0` | Join the VM to an Active Directory domain |
+
+**AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above — set `AD_DNS_SERVER` to your DC's IP.
 
 #### EPEL on Oracle Linux and RHEL
 Xfce and xrdp are not included in the default repositories for Oracle Linux or RHEL. `ENABLE_EPEL=1` is the default so the script works out of the box. The EPEL setup is distro-aware:
@@ -75,6 +87,15 @@ Xfce and xrdp are not included in the default repositories for Oracle Linux or R
 - **RHEL:** installs EPEL from `dl.fedoraproject.org` and enables CodeReady Linux Builder (CRB / powertools), which is required for some EPEL package dependencies
 
 If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
+
+## AD Domain Join — Autoscale Configuration Notes
+
+When using AD join with autoscale:
+
+- Enable **Add Active Directory Computer Record** in the autoscale config and select the LDAP config for the domain.
+- Set **Connection Credential Type** to **SSO User Accounts** and **SSO Domain** to your AD domain.
+- **Kasm Desktop Service Installed** should be **disabled** — Kasm does not use KDS for the AD SSO RDP scenario. Set `ENABLE_KDS=0` in the script.
+- Enable **Require Server Checkin**. When `ENABLE_KDS=0`, the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
 
 ## Port Requirements
 
