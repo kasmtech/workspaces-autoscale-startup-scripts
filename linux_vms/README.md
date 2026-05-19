@@ -46,7 +46,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 | `ENABLE_XRDP` | `1` | Install and configure xrdp for RDP access |
 | `ENABLE_KDS` | `1` | Install and register Kasm Desktop Service |
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via UFW (preferred on Ubuntu) or iptables |
-| `ENABLE_AD_JOIN` | `1` | Join the VM to an Active Directory domain |
+| `ENABLE_AD_JOIN` | `0` | Join the VM to an Active Directory domain |
 
 **AD join variables (when `ENABLE_AD_JOIN=1`):**
 
@@ -94,8 +94,11 @@ When using AD join with autoscale:
 
 - Enable **Add Active Directory Computer Record** in the autoscale config and select the LDAP config for the domain.
 - Set **Connection Credential Type** to **SSO User Accounts** and **SSO Domain** to your AD domain.
-- **Kasm Desktop Service Installed** should be **disabled** — Kasm does not use KDS for the AD SSO RDP scenario. Set `ENABLE_KDS=0` in the script.
-- Enable **Require Server Checkin**. When `ENABLE_KDS=0`, the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
+- Enable **Require Server Checkin** so Kasm waits for the VM to fully configure itself before accepting sessions.
+- The **Kasm Desktop Service Installed** toggle must match whether KDS is actually running on the VM:
+  - `ENABLE_KDS=1` → toggle **on**: KDS registers the server and handles checkin automatically via `register_wizard.sh`.
+  - `ENABLE_KDS=0` → toggle **off**: the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
+- Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, only port 3389 needs to be open.
 
 ## Port Requirements
 
