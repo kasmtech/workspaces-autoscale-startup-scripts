@@ -78,12 +78,15 @@ install_epel() {{
       ;;
     rhel)
       dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${{OS_MAJOR}}.noarch.rpm"
-      # Enable CodeReady Linux Builder — required for some EPEL package dependencies on RHEL
-      if [ "$OS_MAJOR" -ge 9 ]; then
-        dnf config-manager --enable crb || true
-      else
-        dnf config-manager --enable powertools || true
-      fi
+      # CodeReady Linux Builder is required for some EPEL package dependencies on RHEL.
+      # The repo name differs between bare-metal RHEL, RHUI cloud images, and RHEL 9's 'crb' alias —
+      # try each until one succeeds. 'powertools' is a CentOS-only fallback.
+      ARCH=$(uname -m)
+      dnf config-manager --enable "codeready-builder-for-rhel-${{OS_MAJOR}}-${{ARCH}}-rpms" 2>/dev/null \
+        || dnf config-manager --enable "codeready-builder-for-rhel-${{OS_MAJOR}}-rhui-rpms" 2>/dev/null \
+        || dnf config-manager --enable crb 2>/dev/null \
+        || dnf config-manager --enable powertools 2>/dev/null \
+        || echo "[WARN] Could not enable CodeReady Builder / CRB repo — some EPEL deps may not resolve" >&2
       ;;
     *)
       echo "[ERROR] EPEL install not supported for OS: $OS_ID" >&2
@@ -331,6 +334,10 @@ configure_dns_for_ad() {{
 sync_time() {{
   echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
   systemctl enable --now chronyd
+  # Wait up to ~30s for chrony to contact a source before stepping. Without this,
+  # makestep can fire before any NTP sample is in and realm join later fails with
+  # an opaque Kerberos clock-skew error.
+  chronyc waitsync 6 0 0 5 || echo "[WARN] chrony did not reach a source within 30s" >&2
   if ! chronyc makestep; then
     echo "[WARN] chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join" >&2
   fi

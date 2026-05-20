@@ -271,6 +271,10 @@ _configure_dns_resolv_conf() {{
 sync_time() {{
   echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
   systemctl enable --now chrony
+  # Wait up to ~30s for chrony to contact a source before stepping. Without this,
+  # makestep can fire before any NTP sample is in and realm join later fails with
+  # an opaque Kerberos clock-skew error.
+  chronyc waitsync 6 0 0 5 || echo "[WARN] chrony did not reach a source within 30s" >&2
   if ! chronyc makestep; then
     echo "[WARN] chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join" >&2
   fi
