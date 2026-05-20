@@ -107,9 +107,9 @@ When using these autoscale configurations:
 - The Kasm Desktop Service requires TCP port **4902** to be open so the service can communicate with the Kasm API for registration and keepalive checks.
 - KasmVNC requires TCP port **5902** to be open for browser-based VNC connections.
 
-Set `ENABLE_IPTABLES=1` to have the script open only the ports corresponding to the enabled services. On Debian/Ubuntu, UFW is used if active, falling back to raw iptables. On Oracle Linux/RHEL, firewalld is used if active, falling back to iptables-services.
+By default (`ENABLE_IPTABLES=1`), the script opens only the ports corresponding to the enabled services. On Debian/Ubuntu, UFW is used if active, falling back to raw iptables. On Oracle Linux/RHEL, firewalld is used if active, falling back to iptables-services.
 
-If you manage firewall rules outside the script, change `ENABLE_IPTABLES=0`.
+If you manage firewall rules outside the script, set `ENABLE_IPTABLES=0`.
 
 ## Logging
 

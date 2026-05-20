@@ -296,15 +296,21 @@ configure_dns_for_ad() {{
   fi
   if command -v nmcli >/dev/null 2>&1; then
     echo "[INFO] Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
-    NIC=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2 == "ethernet" {{print $1}}' | head -1)
-    if [ -z "$NIC" ]; then
-      echo "[ERROR] No ethernet connection found via nmcli" >&2
+    local dev nic
+    dev=$(ip route show default 2>/dev/null | awk 'NR==1 {{print $5}}')
+    if [ -z "$dev" ]; then
+      echo "[ERROR] Could not determine default route interface" >&2
       exit 1
     fi
-    echo "[INFO] Updating connection: $NIC"
-    nmcli connection modify "$NIC" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
+    nic=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: -v d="$dev" '$2 == d {{print $1}}' | head -1)
+    if [ -z "$nic" ]; then
+      echo "[ERROR] No active NetworkManager connection found for device $dev" >&2
+      exit 1
+    fi
+    echo "[INFO] Updating connection: $nic (device: $dev)"
+    nmcli connection modify "$nic" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
     nmcli connection reload
-    nmcli connection up "$NIC" || true
+    nmcli connection up "$nic" || true
   else
     echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
     local tmp
@@ -347,9 +353,15 @@ join_domain() {{
 
 enable_homedir_creation() {{
   echo "[INFO] Configuring sssd and home directory creation"
-  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
-    echo "ad_gpo_map_remote_interactive = +xrdp-sesman" >> /etc/sssd/sssd.conf
+  if [ ! -f /etc/sssd/sssd.conf ]; then
+    echo "[ERROR] /etc/sssd/sssd.conf not found — realm join may not have completed successfully" >&2
+    exit 1
   fi
+  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
+    sed -i '/^\[domain\//a ad_gpo_map_remote_interactive = +xrdp-sesman' /etc/sssd/sssd.conf
+  fi
+  chown root:root /etc/sssd/sssd.conf
+  chmod 600 /etc/sssd/sssd.conf
   authselect select sssd with-mkhomedir --force || true
   systemctl enable --now oddjobd
   systemctl enable sssd
@@ -369,7 +381,7 @@ kasm_checkin() {{
 }}
 
 install_ad_join() {{
-  if realm list 2>/dev/null | grep -qi "$AD_DOMAIN"; then
+  if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
     echo "[INFO] Already joined to $AD_DOMAIN, skipping"
     return
   fi

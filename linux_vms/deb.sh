@@ -254,11 +254,18 @@ EOF
 }}
 
 _configure_dns_resolv_conf() {{
-  local tmp
+  local tmp target
   tmp=$(mktemp)
   printf 'nameserver %s\n' "$AD_DNS_SERVER" >"$tmp"
   grep -v "^nameserver $AD_DNS_SERVER" /etc/resolv.conf >>"$tmp" || true
-  mv "$tmp" /etc/resolv.conf
+  if [ -L /etc/resolv.conf ]; then
+    target=$(readlink -f /etc/resolv.conf)
+    echo "[INFO] /etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
+    cp "$tmp" "$target"
+    rm -f "$tmp"
+  else
+    mv "$tmp" /etc/resolv.conf
+  fi
 }}
 
 sync_time() {{
@@ -292,10 +299,16 @@ join_domain() {{
 }}
 
 enable_homedir_creation() {{
-  echo "[INFO] Configuring sssd for xrdp GPO compatibility"
-  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
-    echo "ad_gpo_map_remote_interactive = +xrdp-sesman" >> /etc/sssd/sssd.conf
+  echo "[INFO] Configuring sssd and home directory creation"
+  if [ ! -f /etc/sssd/sssd.conf ]; then
+    echo "[ERROR] /etc/sssd/sssd.conf not found — realm join may not have completed successfully" >&2
+    exit 1
   fi
+  if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
+    sed -i '/^\[domain\//a ad_gpo_map_remote_interactive = +xrdp-sesman' /etc/sssd/sssd.conf
+  fi
+  chown root:root /etc/sssd/sssd.conf
+  chmod 600 /etc/sssd/sssd.conf
   pam-auth-update --enable mkhomedir || true
   systemctl enable sssd
   systemctl restart sssd
@@ -314,7 +327,7 @@ kasm_checkin() {{
 }}
 
 install_ad_join() {{
-  if realm list 2>/dev/null | grep -qi "$AD_DOMAIN"; then
+  if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
     echo "[INFO] Already joined to $AD_DOMAIN, skipping"
     return
   fi
