@@ -15,6 +15,7 @@ AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password f
 # REQUIRED: set to your AD DNS server (Domain Controller IP) so the VM can resolve AD SRV records
 AD_DNS_SERVER=""                            # e.g. "192.168.100.6"
 
+
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
 touch "$LOG_FILE"
@@ -224,7 +225,8 @@ install_ad_dependencies() {{
   apt-get install -y \
     realmd sssd sssd-tools adcli \
     krb5-user oddjob oddjob-mkhomedir \
-    samba-common-bin dnsutils
+    samba-common-bin dnsutils \
+    chrony
 }}
 
 configure_dns_for_ad() {{
@@ -244,7 +246,10 @@ EOF
 
 sync_time() {{
   echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
-  chronyc makestep 2>/dev/null || ntpdate -u pool.ntp.org 2>/dev/null || true
+  systemctl enable --now chrony
+  if ! chronyc makestep; then
+    echo "[WARN] chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join" >&2
+  fi
 }}
 
 test_domain_resolution() {{
@@ -281,10 +286,14 @@ enable_homedir_creation() {{
 
 kasm_checkin() {{
   echo "[INFO] Signaling Kasm server ready"
-  curl -k -X POST \
-    -H "Content-Type: application/json" \
-    -d '{{"status": "running", "status_message": "Startup complete", "status_progress": "100"}}' \
-    "https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}" || true
+  if curl -k -fsS -X POST \
+      -H "Content-Type: application/json" \
+      --data '{{"status":"running","status_message":"Startup complete","status_progress":"100"}}' \
+      "https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}"; then
+    echo "[INFO] Kasm check-in successful"
+  else
+    echo "[ERROR] Kasm check-in failed — server may not be marked ready in Kasm UI" >&2
+  fi
 }}
 
 install_ad_join() {{
