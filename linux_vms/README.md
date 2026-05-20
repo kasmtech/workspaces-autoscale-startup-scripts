@@ -54,7 +54,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 |----------|--------|-------------|
 | `AD_DOMAIN` | Kasm `{domain}` | The AD domain to join (e.g. `corp.example.com`) |
 | `AD_JOIN_PASSWORD` | Kasm `{ad_join_credential}` | One-time machine account password created by Kasm |
-| `AD_DNS_SERVER` | **Admin must set** | IP address of the Domain Controller / AD DNS server (e.g. `192.168.1.10`). Required for Kerberos SRV record resolution. |
+| `AD_DNS_SERVER` | **Admin must set** | IP address of the Domain Controller / AD DNS server (e.g. `192.168.1.10`). Required on cloud VMs where DHCP DNS does not resolve AD SRV records. Leave empty only if the VM is already using AD-aware DNS. |
 
 ### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
 
@@ -79,6 +79,8 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script de
 | `ENABLE_AD_JOIN` | `0` | Join the VM to an Active Directory domain |
 
 **AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above — set `AD_DNS_SERVER` to your DC's IP.
+
+> **DNS configuration note:** if `NetworkManager` (`nmcli`) is present, DNS is configured via the active connection profile so it survives reconnects. On minimal installs without NetworkManager, the script falls back to writing `/etc/resolv.conf` directly.
 
 #### EPEL on Oracle Linux and RHEL
 Xfce and xrdp are not included in the default repositories for Oracle Linux or RHEL. `ENABLE_EPEL=1` is the default so the script works out of the box. The EPEL setup is distro-aware:

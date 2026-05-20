@@ -313,11 +313,18 @@ configure_dns_for_ad() {{
     nmcli connection up "$nic" || true
   else
     echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
-    local tmp
+    local tmp target
     tmp=$(mktemp)
     printf 'nameserver %s\n' "$AD_DNS_SERVER" >"$tmp"
     grep -v "^nameserver $AD_DNS_SERVER" /etc/resolv.conf >>"$tmp" || true
-    mv "$tmp" /etc/resolv.conf
+    if [ -L /etc/resolv.conf ]; then
+      target=$(readlink -f /etc/resolv.conf)
+      echo "[INFO] /etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
+      cp "$tmp" "$target"
+      rm -f "$tmp"
+    else
+      mv "$tmp" /etc/resolv.conf
+    fi
   fi
 }}
 
