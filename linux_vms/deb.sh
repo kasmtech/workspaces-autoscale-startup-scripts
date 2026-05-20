@@ -224,7 +224,7 @@ install_ad_dependencies() {{
   echo "[INFO] Installing AD dependencies"
   apt-get install -y \
     realmd sssd sssd-tools adcli \
-    krb5-user oddjob oddjob-mkhomedir \
+    krb5-user libpam-modules \
     samba-common-bin dnsutils \
     chrony
 }}

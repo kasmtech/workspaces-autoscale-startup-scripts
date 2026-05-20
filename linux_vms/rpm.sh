@@ -111,7 +111,6 @@ install_xfce() {{
     dbus-x11 \
     xorg-x11-xauth \
     xorg-x11-server-Xorg
-  systemctl set-default graphical.target
 }}
 
 # Optional: screenshot tooling

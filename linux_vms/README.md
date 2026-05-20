@@ -102,6 +102,20 @@ When using AD join with autoscale:
   - `ENABLE_KDS=0` → toggle **off**: the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
 - Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, the script performs a direct HTTPS check-in to `{upstream_auth_address}` — outbound port **443** to the Kasm API must be reachable in addition to inbound **3389** for RDP.
 
+### Failure behavior
+
+The script runs under `set -euo pipefail`, so any failure in the AD join sequence (DNS resolution, time sync, realm discovery, realm join, or sssd configuration) aborts the entire startup script. Consequences:
+
+- `install_kds` will **not** run, so the server will never register with the Kasm API.
+- The fallback `kasm_checkin` (only used when `ENABLE_KDS=0`) will also not run.
+- The VM will appear stuck in the autoscale UI until the **Require Server Checkin** timeout expires.
+
+When troubleshooting a server that never came up, check `/var/log/kasm_install.log` on the VM — the AD failure will be near the bottom of the log.
+
+### Security note — one-time password visibility
+
+The Kasm-supplied OTP is passed to `realm join` as a command-line argument (`--one-time-password=…`), which means it is briefly visible in `/proc/<pid>/cmdline` (i.e. via `ps`) for the duration of the join. Since this is a single-use credential, it executes on a fresh VM with no other interactive users, and the join completes in seconds, the practical exposure is minimal. If your threat model requires hiding it entirely, the script would need to be rewritten to call `adcli` with `--stdin-password` and configure sssd manually (bypassing `realmd`).
+
 ## Port Requirements
 
 When using these autoscale configurations:
