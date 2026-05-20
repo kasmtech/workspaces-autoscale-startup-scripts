@@ -294,16 +294,25 @@ configure_dns_for_ad() {{
     echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
     return
   fi
-  echo "[INFO] Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
-  NIC=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2 == "ethernet" {{print $1}}' | head -1)
-  if [ -z "$NIC" ]; then
-    echo "[ERROR] No ethernet connection found via nmcli" >&2
-    exit 1
+  if command -v nmcli >/dev/null 2>&1; then
+    echo "[INFO] Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
+    NIC=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2 == "ethernet" {{print $1}}' | head -1)
+    if [ -z "$NIC" ]; then
+      echo "[ERROR] No ethernet connection found via nmcli" >&2
+      exit 1
+    fi
+    echo "[INFO] Updating connection: $NIC"
+    nmcli connection modify "$NIC" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
+    nmcli connection reload
+    nmcli connection up "$NIC" || true
+  else
+    echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
+    local tmp
+    tmp=$(mktemp)
+    printf 'nameserver %s\n' "$AD_DNS_SERVER" >"$tmp"
+    grep -v "^nameserver $AD_DNS_SERVER" /etc/resolv.conf >>"$tmp" || true
+    mv "$tmp" /etc/resolv.conf
   fi
-  echo "[INFO] Updating connection: $NIC"
-  nmcli connection modify "$NIC" ipv4.dns "$AD_DNS_SERVER"
-  nmcli connection reload
-  nmcli connection up "$NIC" || true
 }}
 
 sync_time() {{
