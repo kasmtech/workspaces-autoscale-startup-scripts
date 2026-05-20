@@ -310,7 +310,7 @@ configure_dns_for_ad() {{
     echo "[INFO] Updating connection: $nic (device: $dev)"
     nmcli connection modify "$nic" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
     nmcli connection reload
-    nmcli connection up "$nic" || true
+    nmcli connection up "$nic" || echo "[WARN] nmcli connection up failed — DNS change may not be active until next reconnect" >&2
   else
     echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
     local tmp target
