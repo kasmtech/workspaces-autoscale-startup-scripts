@@ -98,7 +98,7 @@ When using AD join with autoscale:
 - The **Kasm Desktop Service Installed** toggle must match whether KDS is actually running on the VM:
   - `ENABLE_KDS=1` → toggle **on**: KDS registers the server and handles checkin automatically via `register_wizard.sh`.
   - `ENABLE_KDS=0` → toggle **off**: the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
-- Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, only port 3389 needs to be open.
+- Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, the script performs a direct HTTPS check-in to `{upstream_auth_address}` — outbound port **443** to the Kasm API must be reachable in addition to inbound **3389** for RDP.
 
 ## Port Requirements
 

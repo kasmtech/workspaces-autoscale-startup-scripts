@@ -235,13 +235,30 @@ configure_dns_for_ad() {{
     return
   fi
   echo "[INFO] Configuring DNS for AD: $AD_DNS_SERVER"
-  mkdir -p /etc/systemd/resolved.conf.d
-  cat >/etc/systemd/resolved.conf.d/kasm-ad.conf <<EOF
+  if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1 && \
+     systemctl is-active --quiet systemd-resolved; then
+    mkdir -p /etc/systemd/resolved.conf.d
+    cat >/etc/systemd/resolved.conf.d/kasm-ad.conf <<EOF
 [Resolve]
 DNS=$AD_DNS_SERVER
 Domains=~$AD_DOMAIN
 EOF
-  systemctl restart systemd-resolved
+    if ! systemctl try-restart systemd-resolved; then
+      echo "[WARN] systemd-resolved restart failed — falling back to /etc/resolv.conf" >&2
+      _configure_dns_resolv_conf
+    fi
+  else
+    echo "[INFO] systemd-resolved not active — configuring DNS via /etc/resolv.conf"
+    _configure_dns_resolv_conf
+  fi
+}}
+
+_configure_dns_resolv_conf() {{
+  local tmp
+  tmp=$(mktemp)
+  printf 'nameserver %s\n' "$AD_DNS_SERVER" >"$tmp"
+  grep -v "^nameserver $AD_DNS_SERVER" /etc/resolv.conf >>"$tmp" || true
+  mv "$tmp" /etc/resolv.conf
 }}
 
 sync_time() {{
@@ -254,12 +271,12 @@ sync_time() {{
 
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
-  if [ -z "$(dig +short "$AD_DOMAIN" | head -n1)" ]; then
-    echo "[ERROR] Domain $AD_DOMAIN not resolvable — check AD_DNS_SERVER"
+  dig +short "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
+    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN — check AD_DNS_SERVER" >&2
     exit 1
-  fi
+  }}
   realm discover "$AD_DOMAIN" >/dev/null || {{
-    echo "[ERROR] realm discovery failed for $AD_DOMAIN"
+    echo "[ERROR] realm discovery failed for $AD_DOMAIN" >&2
     exit 1
   }}
   echo "[INFO] Domain resolution successful"
@@ -313,8 +330,8 @@ install_ad_join() {{
 apt_wait
 sleep 10
 apt_wait
-apt update
-apt install -y wget
+apt-get update || exit 1
+apt-get install -y wget curl || exit 1
 
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
   configure_iptables

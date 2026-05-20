@@ -245,11 +245,11 @@ EOF'
 install_kds() {{
 
   ARCH=$(uname -m)
-  if [[ "$ARCH" == "x86_64" ]]; then
-    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.rpm"
-  else
-    KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.rpm"
-  fi
+  case "$ARCH" in
+    x86_64)          KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.rpm" ;;
+    aarch64|arm64)   KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.rpm" ;;
+    *)               echo "[ERROR] Unsupported architecture: $ARCH" >&2; exit 1 ;;
+  esac
 
   cd /tmp
   wget "$KDS_RPM_URL" -O kasm-desktop-service.rpm
@@ -325,12 +325,8 @@ sync_time() {{
 
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
-  dig +short "$AD_DOMAIN" | grep -q '.' || {{
-    echo "[ERROR] Domain $AD_DOMAIN not resolvable — check AD_DNS_SERVER" >&2
-    exit 1
-  }}
   dig +short "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
-    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN" >&2
+    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN — check AD_DNS_SERVER" >&2
     exit 1
   }}
   realm discover "$AD_DOMAIN" >/dev/null || {{
@@ -388,7 +384,7 @@ install_ad_join() {{
 
 sleep 5
 
-dnf install -y wget
+dnf install -y wget curl || exit 1
 
 # iptables-services is in base/appstream repos, so firewall setup runs before EPEL is configured
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
