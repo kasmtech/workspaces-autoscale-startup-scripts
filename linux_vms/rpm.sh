@@ -99,8 +99,10 @@ install_xfce() {{
   if ! dnf group info "Xfce" &>/dev/null; then
     if [ "$ENABLE_EPEL" -eq 0 ]; then
       echo "[ERROR] Xfce group is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
-      return 1
+    else
+      echo "[ERROR] Xfce group is not available even though EPEL was enabled. install_epel may have partially failed — check the log above for EPEL or CRB errors before retrying." >&2
     fi
+    return 1
   fi
   dnf groupinstall -y "Xfce"
   dnf install -y \
@@ -176,12 +178,14 @@ install_kasmvnc() {{
 }}
 
 install_xrdp() {{
-  # Precheck: verify xrdp is available; if not, EPEL must be enabled
+  # Precheck: verify xrdp is available; if not, EPEL must be enabled and working
   if ! dnf list available xrdp &>/dev/null; then
     if [ "$ENABLE_EPEL" -eq 0 ]; then
       echo "[ERROR] xrdp is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
-      return 1
+    else
+      echo "[ERROR] xrdp is not available even though EPEL was enabled. install_epel may have partially failed — check the log above for EPEL or CRB errors before retrying." >&2
     fi
+    return 1
   fi
 
   dnf install -y xrdp
@@ -199,7 +203,7 @@ install_xrdp() {{
 unset DBUS_SESSION_BUS_ADDRESS
 unset WAYLAND_DISPLAY
 export XDG_SESSION_TYPE=x11
-exec xfce4-session
+exec dbus-launch --exit-with-session xfce4-session
 EOF
 
   chmod +x /etc/xrdp/startwm.sh
@@ -344,7 +348,11 @@ sync_time() {{
 
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
-  dig +short "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
+  # Pin dig to AD_DNS_SERVER when provided so the test bypasses any stale system
+  # resolver state from before configure_dns_for_ad ran.
+  local dig_server=""
+  [ -n "$AD_DNS_SERVER" ] && dig_server="@$AD_DNS_SERVER"
+  dig +short $dig_server "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
     echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN — check AD_DNS_SERVER" >&2
     exit 1
   }}
