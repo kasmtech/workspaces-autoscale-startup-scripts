@@ -4,18 +4,103 @@
 # Cloudbase Init already execute startup scripts asynchronously. Running as SYSTEM ensures registry
 # operations succeed even when no user is logged in.
 
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$DomainName,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ActiveDirectoryCredential,
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$DnsServers,
+
+    [Parameter(Mandatory=$false)]
+    [string]$KasmHostname,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RegistrationToken,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ServerId,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ServerName,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_ProfileLocations,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_CloudCache,
+
+    [Parameter(Mandatory=$false)]
+    [string]$FSLogix_ProfileType,
+
+    [switch]$SkipStartAudioService,
+
+    [switch]$RenameComputer,
+
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
+)
+
 $TaskName = "KasmStartupScript"
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Import-Module $ScriptDirectory\Utils.psm1
 
 
-# Build argument string
-$StartupArgs = $args | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }
-$TaskArgs = @("-ExecutionPolicy", "Bypass", "-File", "`"$($ScriptDirectory)\Init-VM.ps1`"") + $StartupArgs
+$escapedDomainName               = $DomainName               -replace "'", "''"
+$escapedActiveDirectoryCredential = $ActiveDirectoryCredential -replace "'", "''"
+$escapedKasmHostname             = $KasmHostname             -replace "'", "''"
+$escapedRegistrationToken        = $RegistrationToken        -replace "'", "''"
+$escapedServerId                 = $ServerId                 -replace "'", "''"
+$escapedServerName               = $ServerName               -replace "'", "''"
+$escapedFSLogixProfileLocations  = $FSLogix_ProfileLocations  -replace "'", "''"
+$escapedFSLogixCloudCache        = $FSLogix_CloudCache        -replace "'", "''"
+$escapedFSLogixProfileType       = $FSLogix_ProfileType       -replace "'", "''"
+
+$dnsServersLiteral = if ($DnsServers) {
+    $items = $DnsServers | ForEach-Object { "'$($_ -replace "'", "''")'" }
+    "@($($items -join ', '))"
+} else { '@()' }
+
+$skipAudioLiteral = if ($SkipStartAudioService) { '$true' } else { '$false' }
+$renameLiteral    = if ($RenameComputer)        { '$true' } else { '$false' }
+$keepLiteral      = if ($KeepTaskActionScripts) { '$true' } else { '$false' }
+$verifyLiteral    = if ($VerifyKasmApiCert)     { '$true' } else { '$false' }
+
+$WrapperPath = "$ScriptDirectory\Init-VM_TaskAction.ps1"
+Set-Content -Path $WrapperPath -Encoding UTF8 -Value @"
+`$ScriptDirectory = Split-Path -Parent `$MyInvocation.MyCommand.Definition
+`$keepTaskActionScripts = $keepLiteral
+Import-Module "`$ScriptDirectory\Utils.psm1" -Force
+if (-not `$keepTaskActionScripts) { Remove-Item `$MyInvocation.MyCommand.Definition -Force -ErrorAction SilentlyContinue }
+`$params = @{
+    DomainName                = '$escapedDomainName'
+    ActiveDirectoryCredential = '$escapedActiveDirectoryCredential'
+    DnsServers                = $dnsServersLiteral
+    KasmHostname              = '$escapedKasmHostname'
+    RegistrationToken         = '$escapedRegistrationToken'
+    ServerId                  = '$escapedServerId'
+    ServerName                = '$escapedServerName'
+    FSLogix_ProfileLocations  = '$escapedFSLogixProfileLocations'
+    FSLogix_CloudCache        = '$escapedFSLogixCloudCache'
+    FSLogix_ProfileType       = '$escapedFSLogixProfileType'
+    SkipStartAudioService     = $skipAudioLiteral
+    RenameComputer            = $renameLiteral
+    KeepTaskActionScripts     = $keepLiteral
+    VerifyKasmApiCert         = $verifyLiteral
+}
+try {
+    & "`$ScriptDirectory\Init-VM.ps1" @params
+} catch {
+    Write-Log "Failed to invoke Init-VM.ps1: `$_" -EntryType "Error"
+}
+"@
 
 
 # Create action for scheduled task
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($TaskArgs -join ' ')
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$WrapperPath`""
 
 
 # Register the task as SYSTEM, scheduled to run once
@@ -23,7 +108,7 @@ try {
     Register-ScheduledTask -TaskName $TaskName -Action $Action -RunLevel Highest -User "SYSTEM" -Force -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)) | Out-Null
     Write-Log "Registered scheduled task: $TaskName"
 } catch {
-    Write-Log "ERROR registering task: $_" -EntryType "Error"
+    Write-Log "Failed to register task: $_" -EntryType "Error"
 }
 
 
@@ -32,7 +117,7 @@ try {
     Start-ScheduledTask -TaskName $TaskName
     Write-Log "Started scheduled task"
 } catch {
-    Write-Log "ERROR starting task: $_" -EntryType "Error"
+    Write-Log "Failed to start task: $_" -EntryType "Error"
 }
 
 
@@ -45,5 +130,5 @@ try {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     Write-Log "Unregistered scheduled task"
 } catch {
-    Write-Log "ERROR unregistering task: $_" -EntryType "Error"
+    Write-Log "Failed to unregister task: $_" -EntryType "Error"
 }

@@ -31,20 +31,46 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$FSLogix_ProfileType,
 
-    [Parameter(Mandatory=$false)]
-    [string]$StartAudioService=$true
+    [switch]$SkipStartAudioService,
+
+    [switch]$RenameComputer,
+
+    [switch]$KeepTaskActionScripts,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
-Import-Module $ScriptDirectory\Utils.psm1
+
+# Catch terminating errors before Import-Module runs, when Write-Log is not yet available
+trap {
+    "$(Get-Date -Format o)`tFATAL: $_" | Out-File -FilePath "$ScriptDirectory\kasm_startup_script.log" -Append -Encoding utf8
+    exit 1
+}
+
+Import-Module $ScriptDirectory\Utils.psm1 -Force
+Set-LoggingProperties -KasmHostname $KasmHostname -Token $RegistrationToken -ServerName $ServerName -VerifyKasmApiCert:$VerifyKasmApiCert
 
 $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
 $FSLogixScript = "$ScriptDirectory\Install-FSLogix.ps1"
 $AudioServiceScript = "$ScriptDirectory\Start-AudioService.ps1"
 
-$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
+Function Get-DoComputerRename {
+    if (-not $RenameComputer) { return $false }
 
+    if (-not $ServerName) {
+        Write-Log "RenameComputer is set but ServerName is empty. Skipping rename." -EntryType "Warning"
+        return $false
+    }
+
+    if ($env:COMPUTERNAME -eq $ServerName) {
+        Write-Log "Computer name is already '$ServerName'. Skipping rename."
+        return $false
+    }
+
+    return $true
+}
 
 Function Invoke-DesktopServiceScript {
     if (-not $KasmHostname) {
@@ -58,7 +84,7 @@ Function Invoke-DesktopServiceScript {
 
         if (Test-FileExists -Path $DesktopServiceScript) {
             Write-Log "Invoking $DesktopServiceScript"
-            & $DesktopServiceScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -AwaitDomain $DoJoinDomain
+            & $DesktopServiceScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -AwaitDomain $DoJoinDomain -VerifyKasmApiCert:$VerifyKasmApiCert
         } else {
             Write-Log "Kasm Desktop Service script does not exist: $DesktopServiceScript" -EntryType "Error"
         } 
@@ -66,7 +92,7 @@ Function Invoke-DesktopServiceScript {
 }
 
 Function Invoke-AudioServiceScript {
-    if ($StartAudioService -and (Test-FileExists -Path $AudioServiceScript)) {
+    if (-not $SkipStartAudioService -and (Test-FileExists -Path $AudioServiceScript)) {
         Write-Log "Audio Service configuration detected"
 
         if ((Test-FileExists -Path $AudioServiceScript)){
@@ -97,6 +123,36 @@ Function Invoke-DomainJoinAndFSLogixScripts {
     }
 }
 
+Function Register-DelayedDesktopServiceScript {
+    if (-not $KasmHostname) {
+        Write-Log "No value set for KasmHostname. Skipping Kasm Desktop Service installation."
+        return
+    } elseif (-not $RegistrationToken) {
+        Write-Log "No value set for RegistrationToken. Skipping Kasm Desktop Service installation."
+        return
+    } elseif (-not $ServerId) {
+        Write-Log "No value set for ServerId. Skipping Kasm Desktop Service installation."
+        return
+    }
+
+    $DesktopServiceTaskScript = "$ScriptDirectory\Install-KasmDesktopService-Task.ps1"
+
+    if (Test-FileExists -Path $DesktopServiceTaskScript) {
+        Write-Log "Invoking $DesktopServiceTaskScript"
+        & $DesktopServiceTaskScript -KasmHostname $KasmHostname -ServerId $ServerId -RegistrationToken $RegistrationToken -KeepTaskActionScripts:$KeepTaskActionScripts -VerifyKasmApiCert:$VerifyKasmApiCert
+    } else {
+        Write-Log "Desktop service task script does not exist: $DesktopServiceTaskScript" -EntryType "Error"
+    }
+}
+
+Function Invoke-ComputerRename {
+    Write-Log "Renaming computer to $ServerName"
+    Rename-Computer -NewName $ServerName -Force
+
+    Write-Log "Rebooting to apply computer rename"
+    Restart-Computer -Force
+}
+
 Function Invoke-InstallFSLogix {
     if ($FSLogix_ProfileLocations) {
         Write-Log "FSLogix configuration detected"
@@ -114,8 +170,20 @@ Function Invoke-InstallFSLogix {
 
 Write-Log "VM initialization script started"
 
-Invoke-DesktopServiceScript
-Invoke-AudioServiceScript
-Invoke-DomainJoinAndFSLogixScripts
+$DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
+$DoRenameComputer = Get-DoComputerRename
+
+if ($DoJoinDomain) {
+    Invoke-DesktopServiceScript
+    Invoke-AudioServiceScript
+    Invoke-DomainJoinAndFSLogixScripts
+} elseif ($DoRenameComputer) {
+    Invoke-AudioServiceScript
+    Register-DelayedDesktopServiceScript
+    Invoke-ComputerRename
+} else {
+    Invoke-DesktopServiceScript
+    Invoke-AudioServiceScript
+}
 
 Write-Log "VM initialization script completed"

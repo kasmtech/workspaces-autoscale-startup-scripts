@@ -15,6 +15,6 @@ if ((Get-Service -Name $ServiceName).Status -ne 'Running') {
         Write-Log "Service $ServiceName started successfully."
     }
     catch {
-        Write-Warning "Failed to start service '$ServiceName': $($_.Exception.Message)"
+        Write-Log "Failed to start service '$ServiceName': $($_.Exception.Message)" -EntryType "Warning"
     }
 }
