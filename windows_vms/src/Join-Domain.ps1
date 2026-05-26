@@ -165,7 +165,7 @@ function Join-Computer {
         Write-Log "Rebooting system"
         Restart-Computer -Force
     } catch {
-        Write-Log "Failed to join domain: $($_.Exception.Message)"
+        Write-Log "Failed to join domain: $($_.Exception.Message)" -EntryType "Error"
         exit 1
     }
 }

@@ -17,7 +17,9 @@ param(
     [bool]$Winfsp=$true,
 
     [Parameter(Mandatory=$false)]
-    [bool]$AwaitDomain=$false
+    [bool]$AwaitDomain=$false,
+
+    [switch]$VerifyKasmApiCert
 )
 
 $ScriptDirectory = $(Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -44,14 +46,14 @@ Function Install-Winfsp {
         try {
             Start-Process -FilePath $InstallerPath -ArgumentList '/q' -WorkingDirectory $ScriptDirectory -Wait
         } catch {
-            Write-Log "Error installing WinFSP: $($_.Exception.Message)"
+            Write-Log "Error installing WinFSP: $($_.Exception.Message)" -EntryType "Error"
             return
         }
 
         #Remove-Item $InstallerPath -Force
         Write-Log "Installed WinFSP" 
     } else {
-        Write-Log "No WinFSP installer found. Skipping WinFSP installation."
+        Write-Log "No WinFSP installer found. Skipping WinFSP installation." -EntryType "Warning"
     }
 }
 
@@ -92,7 +94,7 @@ Function Assert-KasmServiceStatus {
     while ($service.Status -ne $Status) {
         Start-Sleep -Seconds 1
         $service = Get-Service -Name "Kasm"
-        Write-Log "Service status: $($service.Status)"
+        Write-Log "Service status: $($service.Status)" -EntryType "Debug"
 
         $Attempts++
         if ($Attempts -ge 30) {
@@ -187,7 +189,10 @@ Function Test-RegistrationToken {
 }
 
 Function Register-KasmDesktopService {
-    Disable-SSLVerification
+    if (-not $VerifyKasmApiCert) {
+        Disable-SSLVerification
+    }
+
     Test-RegistrationToken
 
     Write-Log "Registering the Windows Service as $ServerId with the Kasm deployment at $KasmHostname"
