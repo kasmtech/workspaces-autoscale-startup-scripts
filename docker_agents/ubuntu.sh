@@ -14,7 +14,7 @@ SWAP_SIZE_GB='8'
 KASM_BUILD_URL='https://kasm-static-content.s3.amazonaws.com/kasm_release_1.18.1.tar.gz'
 
 
-apt_wait () {{
+apt_wait () {
   while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
@@ -26,18 +26,19 @@ apt_wait () {{
       sleep 1
     done
   fi
-}}
+}
 
 
 # Create a swap file
-if [[ $(sudo swapon --show) ]]; then
-  echo 'Swap Exists'
+if sudo swapon --show | grep -q '^'; then
+  echo "Swap exists"
 else
-  fallocate -l ${{SWAP_SIZE_GB}}G /var/swap.1
-  /sbin/mkswap /var/swap.1
-  chmod 600 /var/swap.1
-  /sbin/swapon /var/swap.1
-  echo '/var/swap.1 swap swap defaults 0 0' | tee -a /etc/fstab
+  sudo fallocate -l "${SWAP_SIZE_GB}G" /var/swap.1
+  sudo chmod 600 /var/swap.1
+  sudo mkswap /var/swap.1
+  sudo swapon /var/swap.1
+
+  echo '/var/swap.1 swap swap defaults 0 0' | sudo tee -a /etc/fstab
 fi
 
 

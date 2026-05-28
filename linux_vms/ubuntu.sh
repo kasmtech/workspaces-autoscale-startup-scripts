@@ -2,7 +2,7 @@
 set -ex
 export DEBIAN_FRONTEND=noninteractive
 
-apt_wait () {{
+apt_wait () {
   while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
     sleep 1
   done
@@ -14,13 +14,13 @@ apt_wait () {{
       sleep 1
     done
   fi
-}}
+}
 
-install_xfce (){{
+install_xfce (){
   apt-get install -y supervisor xfce4 xfce4-terminal xterm xclip
-}}
+}
 
-install_kasmvnc (){{
+install_kasmvnc (){
   cd /tmp
   KASM_VNC_PATH=/usr/share/kasmvnc
   BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.3.3/kasmvncserver_jammy_1.3.3_amd64.deb"
@@ -40,9 +40,9 @@ install_kasmvnc (){{
   chown -R 1000:0 "/home/$KASM_VNC_USER/.kasmpasswd"
   addgroup $KASM_VNC_USER ssl-cert
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
-}}
+}
 
-install_tigervnc (){{
+install_tigervnc (){
   apt-get install -y tigervnc-standalone-server
   mkdir /home/ubuntu/.vnc
   echo "password123abc" | vncpasswd -f > /home/ubuntu/.vnc/passwd
@@ -50,7 +50,7 @@ install_tigervnc (){{
   chown -R ubuntu:ubuntu /home/ubuntu/.vnc
   chmod 0600 /home/ubuntu/.vnc/passwd
   su -l -c 'vncserver -localhost no' ubuntu
-}}
+}
 
 apt_wait
 sleep 10
