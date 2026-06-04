@@ -33,6 +33,8 @@ param(
 
     [switch]$SkipStartAudioService,
 
+    [switch]$SkipDisableNetBios,
+
     [switch]$RenameComputer,
 
     [switch]$KeepTaskActionScripts,
@@ -55,6 +57,7 @@ $DesktopServiceScript = "$ScriptDirectory\Install-KasmDesktopService.ps1"
 $DomainJoinScript = "$ScriptDirectory\Join-Domain.ps1"
 $FSLogixScript = "$ScriptDirectory\Install-FSLogix.ps1"
 $AudioServiceScript = "$ScriptDirectory\Start-AudioService.ps1"
+$InstantCloneScript = "$ScriptDirectory\Initialize-InstantClone.ps1"
 
 Function Get-DoComputerRename {
     if (-not $RenameComputer) { return $false }
@@ -172,6 +175,8 @@ Write-Log "VM initialization script started"
 
 $DoJoinDomain = $DomainName -and $ActiveDirectoryCredential
 $DoRenameComputer = Get-DoComputerRename
+
+& $InstantCloneScript -ComputerRename $DoRenameComputer -DomainJoin $DoJoinDomain -SkipDisableNetBios:$SkipDisableNetBios
 
 if ($DoJoinDomain) {
     Invoke-DesktopServiceScript

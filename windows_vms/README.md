@@ -9,6 +9,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 - Windows Domain Join - Join the VM to a domain
 - DNS Configuration - Configure DNS for the primary network adapter
 - FSLogix - Install and configure container profiles
+- VMware Instant Clone - Reinitialize cloned VM identity
 
 ## Compatibility
 ![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.1%20%7C%201.18.0-blue?style=flat-square)
@@ -144,6 +145,27 @@ For scenarios where a VM needs to be renamed without joining a domain (such as V
   -ServerId "{server_id}" `
   -ServerName "{server_hostname}" `
   -RenameComputer
+```
+
+### VMware Instant Clone
+When VMware Instant Clone is detected, the startup script automatically reinitializes the cloned VM's identity before any other configuration runs. This step is skipped silently on non-Instant Clone VMs.
+
+The following actions are performed on every Instant Clone:
+- **Machine GUID regeneration** — generates a new `MachineGuid` in the registry to ensure each clone has a unique cryptographic identity
+- **NetBIOS disable** — disables NetBIOS over TCP/IP on all network interfaces to prevent broadcast conflicts between clones; skipped when Computer Rename or Domain Join is configured (can also be skipped with `$SkipDisableNetBios`)
+- **DNS cache flush** — clears the DNS client cache to prevent stale resolutions carried over from the parent VM; skipped when Computer Rename or Domain Join is configured since a reboot is imminent and the network stack reinitializes on restart.
+
+| Variable            | Required | Type   | Description                              |
+|---------------------|----------|--------|------------------------------------------|
+| $SkipDisableNetBios | Optional | switch | Skip disabling NetBIOS on all interfaces. |
+
+#### Example - Instant Clone with NetBIOS Disable Skipped
+```powershell
+& $InitScript `
+  -KasmHostname "{upstream_auth_address}" `
+  -RegistrationToken "{checkin_jwt}" `
+  -ServerId "{server_id}" `
+  -SkipDisableNetBios
 ```
 
 ### FSLogix

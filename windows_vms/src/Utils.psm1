@@ -120,7 +120,7 @@ Function Send-KasmLog {
         logs = @(
             @{
                 host = $ModuleServerName
-                application = "startup-script"
+                application = "windows-startup-script"
                 levelname = $levelMap[$EntryType]
                 message = $Message
                 ingest_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
