@@ -12,7 +12,9 @@ ENABLE_AD_JOIN=0
 AD_DOMAIN="{domain}"
 AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password for the machine account
 
-# REQUIRED: set to your AD DNS server (Domain Controller IP) so the VM can resolve AD SRV records
+# Optional but recommended: set to your AD DNS server (Domain Controller IP) so the VM
+# can resolve AD SRV records. Leave empty only if DHCP already hands out the Domain
+# Controller as the resolver; otherwise the realm join will fail on SRV lookup.
 AD_DNS_SERVER=""                            # e.g. "192.168.100.6"
 
 
@@ -335,6 +337,9 @@ kasm_checkin() {{
 }}
 
 install_ad_join() {{
+  if [ -z "$AD_DNS_SERVER" ]; then
+    echo "[WARN] ENABLE_AD_JOIN=1 but AD_DNS_SERVER is empty — relying on DHCP-provided DNS to resolve $AD_DOMAIN. Set AD_DNS_SERVER to the Domain Controller IP if the join fails on SRV lookup." >&2
+  fi
   if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
     echo "[INFO] Already joined to $AD_DOMAIN, skipping"
     return
