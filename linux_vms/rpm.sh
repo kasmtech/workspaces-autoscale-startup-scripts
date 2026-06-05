@@ -12,11 +12,10 @@ ENABLE_AD_JOIN=0
 AD_DOMAIN="{domain}"
 AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password for the machine account
 
-# Optional but recommended when ENABLE_AD_JOIN=1: set to your AD DNS server (Domain
-# Controller IP) so the VM can resolve AD SRV records. Leave empty only if DHCP already
-# hands out the Domain Controller as the resolver; otherwise the realm join will fail
-# on SRV lookup.
-AD_DNS_SERVER=""                            # e.g. "192.168.100.6"
+# Optional: space-separated list of AD DNS servers (Domain Controller IPs) for SRV record
+# resolution. Leave empty to use existing VNET/DHCP DNS configuration. Recommended for
+# redundancy: "192.168.1.1 192.168.1.2" or omit to rely on preconfigured DNS.
+AD_DNS_SERVER=""                            # e.g. "192.168.100.6" or "192.168.100.6 192.168.100.7"
 
 
 LOG_FILE="/var/log/kasm_install.log"
@@ -324,8 +323,10 @@ configure_dns_for_ad() {{
     echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
     local tmp target
     tmp=$(mktemp)
-    printf 'nameserver %s\n' "$AD_DNS_SERVER" >"$tmp"
-    grep -v "^nameserver $AD_DNS_SERVER" /etc/resolv.conf >>"$tmp" || true
+    for server in $AD_DNS_SERVER; do
+      printf 'nameserver %s\n' "$server" >>"$tmp"
+    done
+    grep -v "^nameserver" /etc/resolv.conf >>"$tmp" || true
     if [ -L /etc/resolv.conf ]; then
       target=$(readlink -f /etc/resolv.conf)
       echo "[INFO] /etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
@@ -406,7 +407,7 @@ kasm_checkin() {{
 
 install_ad_join() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    echo "[WARN] ENABLE_AD_JOIN=1 but AD_DNS_SERVER is empty — relying on DHCP-provided DNS to resolve $AD_DOMAIN. Set AD_DNS_SERVER to the Domain Controller IP if the join fails on SRV lookup." >&2
+    echo "[INFO] AD_DNS_SERVER not set — relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN" >&2
   fi
   if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
     echo "[INFO] Already joined to $AD_DOMAIN, skipping"

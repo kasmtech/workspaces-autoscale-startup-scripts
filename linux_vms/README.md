@@ -54,7 +54,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 |----------|--------|-------------|
 | `AD_DOMAIN` | Kasm `{domain}` | The AD domain to join (e.g. `corp.example.com`) |
 | `AD_JOIN_PASSWORD` | Kasm `{ad_join_credential}` | One-time machine account password created by Kasm |
-| `AD_DNS_SERVER` | **Admin must set** | IP address of the Domain Controller / AD DNS server (e.g. `192.168.1.10`). Required on cloud VMs where DHCP DNS does not resolve AD SRV records. Leave empty only if the VM is already using AD-aware DNS. |
+| `AD_DNS_SERVER` | **Optional** | Space-separated list of Domain Controller / AD DNS server IPs for redundancy (e.g. `192.168.1.10` or `192.168.1.10 192.168.1.11`). Leave empty to use preconfigured VNET/DHCP DNS. Set this when DHCP DNS does not resolve AD SRV records. |
 
 ### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
 
@@ -78,9 +78,9 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script de
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via firewalld (preferred) or iptables |
 | `ENABLE_AD_JOIN` | `0` | Join the VM to an Active Directory domain |
 
-**AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above — set `AD_DNS_SERVER` to your DC's IP.
+**AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above. `AD_DNS_SERVER` is optional — set it to a space-separated list of DC IPs if DHCP DNS doesn't resolve AD SRV records (e.g. `192.168.1.10 192.168.1.11` for redundancy).
 
-> **DNS configuration note:** if `NetworkManager` (`nmcli`) is present, DNS is configured via the active connection profile so it survives reconnects. On minimal installs without NetworkManager, the script falls back to writing `/etc/resolv.conf` directly.
+> **DNS configuration note:** if `NetworkManager` (`nmcli`) is present, DNS is configured via the active connection profile so it survives reconnects. On minimal installs without NetworkManager, the script falls back to writing `/etc/resolv.conf` directly. Multiple DNS servers are supported (space-separated in `AD_DNS_SERVER`) for redundancy; all are configured automatically.
 
 #### EPEL on Oracle Linux and RHEL
 Xfce and xrdp are not included in the default repositories for Oracle Linux or RHEL. `ENABLE_EPEL=1` is the default so the script works out of the box. The EPEL setup is distro-aware:
