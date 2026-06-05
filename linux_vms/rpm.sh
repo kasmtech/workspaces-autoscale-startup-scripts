@@ -353,9 +353,11 @@ sync_time() {{
 test_domain_resolution() {{
   echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
   # Pin dig to AD_DNS_SERVER when provided so the test bypasses any stale system
-  # resolver state from before configure_dns_for_ad ran.
+  # resolver state from before configure_dns_for_ad ran. Use only the first server.
   local dig_server=""
-  [ -n "$AD_DNS_SERVER" ] && dig_server="@$AD_DNS_SERVER"
+  if [ -n "$AD_DNS_SERVER" ]; then
+    dig_server="@${{AD_DNS_SERVER%% *}}"
+  fi
   dig +short $dig_server "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
     echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN — check AD_DNS_SERVER" >&2
     exit 1
