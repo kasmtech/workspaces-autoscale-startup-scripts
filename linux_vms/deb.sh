@@ -25,14 +25,14 @@ configure_iptables() {{
 
   if systemctl is-active --quiet ufw; then
     for i in 1 2 3 4 5; do
-      ufw status >/dev/null 2>&1 && break
+      timeout 30 ufw status >/dev/null 2>&1 && break
       sleep 3
     done
-    [ "$ENABLE_XRDP"    -eq 1 ] && ufw allow 3389/tcp
-    [ "$ENABLE_KDS"     -eq 1 ] && ufw allow 4902/tcp
-    [ "$ENABLE_KASMVNC" -eq 1 ] && ufw allow 5902/tcp
+    [ "$ENABLE_XRDP"    -eq 1 ] && timeout 30 ufw allow 3389/tcp
+    [ "$ENABLE_KDS"     -eq 1 ] && timeout 30 ufw allow 4902/tcp
+    [ "$ENABLE_KASMVNC" -eq 1 ] && timeout 30 ufw allow 5902/tcp
   else
-    apt-get install -y iptables netfilter-persistent
+    apt install -y iptables netfilter-persistent
 
     [ "$ENABLE_XRDP"    -eq 1 ] && iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
     [ "$ENABLE_KDS"     -eq 1 ] && iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
@@ -42,25 +42,27 @@ configure_iptables() {{
   fi
 }}
 
-apt_wait () {{
-  while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+apt_wait() {{
+  for i in {{1..600}}; do
+    if ! fuser /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock &>/dev/null; then
+      break
+    fi
+    printf .
     sleep 1
   done
-  while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
-    sleep 1
-  done
-  if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
-    while fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
-      sleep 1
-    done
-  fi
+  echo
+  fuser -v /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock || true
 }}
 
-install_xfce (){{
-  apt-get install -y supervisor xfce4 xfce4-terminal xterm xclip
+apt() {{
+  command apt-get -o DPkg::Lock::Timeout=600 "$@"
 }}
 
-install_kasmvnc (){{
+install_xfce() {{
+  apt install -y supervisor xfce4 xfce4-terminal xterm xclip
+}}
+
+install_kasmvnc() {{
   cd /tmp
   KASM_VNC_PATH=/usr/share/kasmvnc
   ARCH=$(uname -m)
@@ -86,8 +88,8 @@ install_kasmvnc (){{
   KASM_VNC_USER="{connection_username}"
 
   wget "$BUILD_URL" -O kasmvncserver.deb
-  apt-get install -y gettext ssl-cert libxfont2
-  apt-get install -y /tmp/kasmvncserver.deb
+  apt install -y gettext ssl-cert libxfont2
+  apt install -y /tmp/kasmvncserver.deb
   rm -f /tmp/kasmvncserver.deb
   [ ! -e $KASM_VNC_PATH/www/vnc.html ] && ln -s $KASM_VNC_PATH/www/index.html $KASM_VNC_PATH/www/vnc.html
   cd /tmp
@@ -101,8 +103,8 @@ install_kasmvnc (){{
   su -l -c 'vncserver -select-de XFCE' $KASM_VNC_USER
 }}
 
-install_xrdp () {{
-  apt-get install -y xrdp dbus-x11 xorg x11-xserver-utils
+install_xrdp() {{
+  apt install -y xrdp dbus-x11 xorg x11-xserver-utils
 
   usermod -aG ssl-cert xrdp || true
   systemctl enable xrdp
@@ -161,7 +163,7 @@ EOF'
   systemctl restart xrdp
 }}
 
-install_kds () {{
+install_kds() {{
 
   ARCH=$(uname -m)
   if [[ "$ARCH" == "x86_64" ]]; then
@@ -173,7 +175,7 @@ install_kds () {{
   cd /tmp
   wget "$KDS_DEB_URL" -O kasm-desktop-service.deb
 
-  apt-get install -y ./kasm-desktop-service.deb
+  apt install -y ./kasm-desktop-service.deb
   rm -f ./kasm-desktop-service.deb
 
   sleep 2
@@ -183,12 +185,13 @@ install_kds () {{
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
   API_PORT=443
 
-  bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
+  timeout 300 bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
     --register \
     --no-gui \
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
-    --token="$REG_TOKEN"
+    --token="$REG_TOKEN" \
+  || {{ echo "[ERROR] KDS registration failed or timed out against $API_HOST:$API_PORT" >&2; exit 1; }}
 
   sleep 2
 
@@ -199,23 +202,25 @@ install_kds () {{
 apt_wait
 sleep 10
 apt_wait
-apt-get update
-apt-get install -y wget
+apt update || exit 1
+apt install -y wget || exit 1
 
-[ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
+if [ "$ENABLE_IPTABLES" -eq 1 ]; then
+  configure_iptables || exit 1
+fi
 
-install_xfce
+install_xfce || exit 1
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
-  install_kasmvnc
+  install_kasmvnc || exit 1
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
-  install_xrdp
+  install_xrdp || exit 1
 fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
-  install_kds
+  install_kds || exit 1
 fi
 
 echo "===== KASM DEB INSTALL COMPLETED $(date) ====="

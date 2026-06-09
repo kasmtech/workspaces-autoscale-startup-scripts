@@ -12,7 +12,7 @@ mkdir -p /var/log
 touch "$LOG_FILE"
 chmod 0600 "$LOG_FILE"
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
-exec > >(tee -a "$LOG_FILE") 2>&1
+exec > >(stdbuf -oL -eL tee -a "$LOG_FILE") 2>&1
 
 # Detect OS — used by install_epel and install_kasmvnc
 . /etc/os-release
@@ -20,18 +20,29 @@ OS_ID="$ID"
 OS_MAJOR=$(echo "$VERSION_ID" | cut -d'.' -f1)
 echo "[INFO] Detected OS: $OS_ID $OS_MAJOR"
 
+# Wrap every dnf call so it waits for the package-manager lock (held by
+# oracle-cloud-agent plugin installs and Oracle Autonomous Linux auto-patching at
+# boot) instead of hanging indefinitely or aborting. Also retries flaky downloads.
+dnf() {{
+  command dnf --setopt=lock_timeout=600 --setopt=retries=10 "$@"
+}}
+
 configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet firewalld; then
+    # firewall-cmd can hang on D-Bus early in boot on Oracle (Autonomous) Linux.
+    # Bound every call with timeout and recover a wedged daemon by restarting it.
     for i in 1 2 3 4 5; do
-      firewall-cmd --state >/dev/null 2>&1 && break
+      timeout 30 firewall-cmd --state >/dev/null 2>&1 && break
+      echo "[WARN] firewalld unresponsive (attempt $i); restarting firewalld"
+      systemctl restart firewalld || true
       sleep 3
     done
-    [ "$ENABLE_XRDP"    -eq 1 ] && firewall-cmd --add-port=3389/tcp --permanent
-    [ "$ENABLE_KDS"     -eq 1 ] && firewall-cmd --add-port=4902/tcp --permanent
-    [ "$ENABLE_KASMVNC" -eq 1 ] && firewall-cmd --add-port=5902/tcp --permanent
-    firewall-cmd --reload
+    [ "$ENABLE_XRDP"    -eq 1 ] && timeout 30 firewall-cmd --add-port=3389/tcp --permanent || true
+    [ "$ENABLE_KDS"     -eq 1 ] && timeout 30 firewall-cmd --add-port=4902/tcp --permanent || true
+    [ "$ENABLE_KASMVNC" -eq 1 ] && timeout 30 firewall-cmd --add-port=5902/tcp --permanent || true
+    timeout 30 firewall-cmd --reload || true
   else
     dnf install -y iptables-services
     systemctl enable iptables
@@ -241,12 +252,15 @@ install_kds() {{
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
   API_PORT=443
 
-  /opt/kasm-desktop-service/scripts/register_wizard.sh \
+  # Bound the check-in callback: if the deployment/proxy is unreachable this would
+  # otherwise hang forever with no timeout, and the server would never check in.
+  timeout 300 /opt/kasm-desktop-service/scripts/register_wizard.sh \
     --register \
     --no-gui \
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
-    --token="$REG_TOKEN"
+    --token="$REG_TOKEN" \
+  || {{ echo "[ERROR] KDS registration failed or timed out against $API_HOST:$API_PORT" >&2; exit 1; }}
 
   sleep 2
 
@@ -256,29 +270,30 @@ install_kds() {{
 
 sleep 5
 
-dnf install -y wget
+dnf install -y wget || exit 1
 
 # iptables-services is in base/appstream repos, so firewall setup runs before EPEL is configured
-[ "$ENABLE_IPTABLES" -eq 1 ] && configure_iptables
-
-
-if [ "$ENABLE_EPEL" -eq 1 ]; then
-  install_epel
+if [ "$ENABLE_IPTABLES" -eq 1 ]; then
+  configure_iptables || exit 1
 fi
 
-install_xfce
-install_screenshot_tools
+if [ "$ENABLE_EPEL" -eq 1 ]; then
+  install_epel || exit 1
+fi
+
+install_xfce || exit 1
+install_screenshot_tools || true
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
-  install_kasmvnc
+  install_kasmvnc || exit 1
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
-  install_xrdp
+  install_xrdp || exit 1
 fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
-  install_kds
+  install_kds || exit 1
 fi
 
 echo "===== KASM RPM INSTALL COMPLETED $(date) ====="
