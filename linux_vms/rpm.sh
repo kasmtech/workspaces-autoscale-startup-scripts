@@ -39,18 +39,18 @@ configure_iptables() {{
       systemctl restart firewalld || true
       sleep 3
     done
-    [ "$ENABLE_XRDP"    -eq 1 ] && timeout 30 firewall-cmd --add-port=3389/tcp --permanent || true
-    [ "$ENABLE_KDS"     -eq 1 ] && timeout 30 firewall-cmd --add-port=4902/tcp --permanent || true
-    [ "$ENABLE_KASMVNC" -eq 1 ] && timeout 30 firewall-cmd --add-port=5902/tcp --permanent || true
+    if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 firewall-cmd --add-port=3389/tcp --permanent || true; fi
+    if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 firewall-cmd --add-port=4902/tcp --permanent || true; fi
+    if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 firewall-cmd --add-port=5902/tcp --permanent || true; fi
     timeout 30 firewall-cmd --reload || true
   else
     dnf install -y iptables-services
     systemctl enable iptables
     systemctl start iptables
 
-    [ "$ENABLE_XRDP"    -eq 1 ] && iptables -I INPUT -p tcp --dport 3389 -j ACCEPT
-    [ "$ENABLE_KDS"     -eq 1 ] && iptables -I INPUT -p tcp --dport 4902 -j ACCEPT
-    [ "$ENABLE_KASMVNC" -eq 1 ] && iptables -I INPUT -p tcp --dport 5902 -j ACCEPT
+    if [ "$ENABLE_XRDP"    -eq 1 ]; then iptables -I INPUT -p tcp --dport 3389 -j ACCEPT; fi
+    if [ "$ENABLE_KDS"     -eq 1 ]; then iptables -I INPUT -p tcp --dport 4902 -j ACCEPT; fi
+    if [ "$ENABLE_KASMVNC" -eq 1 ]; then iptables -I INPUT -p tcp --dport 5902 -j ACCEPT; fi
 
     service iptables save
   fi
