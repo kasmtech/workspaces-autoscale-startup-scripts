@@ -24,13 +24,26 @@ configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet ufw; then
-    for i in 1 2 3 4 5; do
-      timeout 30 ufw status >/dev/null 2>&1 && break
-      sleep 3
+    UFW_READY=0
+    for i in $(seq 1 20); do
+      if timeout 30 ufw status >/dev/null 2>&1; then
+        UFW_READY=1
+        break
+      fi
+      echo "[WARN] ufw unresponsive (attempt $i/20); waiting..."
+      if [ "$i" -ge 3 ]; then
+        echo "[WARN] Restarting ufw after $i failed attempts"
+        systemctl restart ufw || true
+      fi
+      sleep 30
     done
-    if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 ufw allow 3389/tcp || true; fi
-    if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 ufw allow 4902/tcp || true; fi
-    if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 ufw allow 5902/tcp || true; fi
+    if [ "$UFW_READY" -eq 0 ]; then
+      echo "[ERROR] ufw did not become ready after 20 attempts; skipping port rules" >&2
+    else
+      if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 ufw allow 3389/tcp || true; fi
+      if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 ufw allow 4902/tcp || true; fi
+      if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 ufw allow 5902/tcp || true; fi
+    fi
   else
     apt install -y iptables netfilter-persistent
 

@@ -31,18 +31,20 @@ configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet firewalld; then
-    # firewall-cmd can hang on D-Bus early in boot on Oracle (Autonomous) Linux.
-    # Bound every call with timeout and recover a wedged daemon by restarting it.
-    for i in 1 2 3 4 5; do
-      timeout 30 firewall-cmd --state >/dev/null 2>&1 && break
-      echo "[WARN] firewalld unresponsive (attempt $i); restarting firewalld"
-      systemctl restart firewalld || true
-      sleep 3
-    done
-    if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 firewall-cmd --add-port=3389/tcp --permanent || true; fi
-    if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 firewall-cmd --add-port=4902/tcp --permanent || true; fi
-    if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 firewall-cmd --add-port=5902/tcp --permanent || true; fi
-    timeout 30 firewall-cmd --reload || true
+    # firewall-cmd talks to firewalld over D-Bus, which is unreliable early in boot
+    # on Oracle (Autonomous) Linux: the daemon reports active(running) yet
+    # firewall-cmd hangs on every D-Bus call, and restarting the daemon does not
+    # clear it. Configure the firewall WITHOUT D-Bus instead: stop firewalld, write
+    # the ports straight to the permanent config with firewall-offline-cmd (no daemon
+    # / no D-Bus needed), then start it so it loads them on boot. Deterministic.
+    systemctl stop firewalld || true
+
+    if [ "$ENABLE_XRDP"    -eq 1 ]; then firewall-offline-cmd --add-port=3389/tcp || true; fi
+    if [ "$ENABLE_KDS"     -eq 1 ]; then firewall-offline-cmd --add-port=4902/tcp || true; fi
+    if [ "$ENABLE_KASMVNC" -eq 1 ]; then firewall-offline-cmd --add-port=5902/tcp || true; fi
+
+    systemctl enable firewalld || true
+    systemctl start firewalld || echo "[WARN] firewalld failed to start; host firewall rules may not be active" >&2
   else
     dnf install -y iptables-services
     systemctl enable iptables
