@@ -17,11 +17,11 @@ AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password f
 # redundancy: "192.168.1.1 192.168.1.2" or omit to rely on preconfigured DNS.
 AD_DNS_SERVER=""                            # e.g. "192.168.100.6" or "192.168.100.6 192.168.100.7"
 
-# Optional: pin the Domain Controller hostname to its IP in /etc/hosts. Use when the DC's
-# A record is not resolvable at join time (e.g. split-horizon DNS, or a DC that serves SRV
-# records but not its own forward A record). Leave empty to skip; both must be set to apply.
-AD_DC_HOSTNAME=""                           # e.g. "dc01.example.core"
-AD_DC_IP=""                                 # e.g. "192.168.100.6"
+# Set the machine's FQDN to <shortname>.<AD_DOMAIN> before joining. Required for the
+# self-join to be allowed to write its own <AD_DOMAIN> SPNs (AD validated writes only
+# permit SPNs matching dNSHostName). Without this, cloud-provider FQDNs (e.g.
+# *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
+SET_DOMAIN_FQDN=1
 
 
 LOG_FILE="/var/log/kasm_install.log"
@@ -287,16 +287,53 @@ _configure_dns_resolv_conf() {{
   fi
 }}
 
-pin_dc_host() {{
-  [ -z "$AD_DC_HOSTNAME" ] && return 0
-  [ -z "$AD_DC_IP" ] && return 0
-  if ! grep -qE "^\s*$AD_DC_IP\s+$AD_DC_HOSTNAME\b" /etc/hosts; then
-    echo "[INFO] Pinning $AD_DC_HOSTNAME -> $AD_DC_IP in /etc/hosts"
-    AD_DC_SHORTNAME=$(echo "$AD_DC_HOSTNAME" | cut -d'.' -f1)
-    echo "$AD_DC_IP $AD_DC_HOSTNAME $AD_DC_SHORTNAME" >>/etc/hosts
-  else
-    echo "[INFO] Hosts pin already present for $AD_DC_HOSTNAME"
+set_domain_fqdn() {{
+  # Make the host's FQDN <shortname>.<AD_DOMAIN> before joining. adcli derives
+  # dNSHostName and the SPN set from the FQDN; AD's self-join "validated write"
+  # only allows SPNs matching dNSHostName, so a cloud-provider FQDN (e.g.
+  # *.oraclevcn.com) triggers CONSTRAINT_ATT_TYPE on servicePrincipalName and the
+  # <AD_DOMAIN> SPNs/keytab entries are silently lost.
+  [ "$SET_DOMAIN_FQDN" -eq 1 ] || return 0
+  local short fqdn current
+  short=$(hostname -s)
+  fqdn="${{short,,}}.${{AD_DOMAIN}}"
+  current=$(hostname -f 2>/dev/null || hostname)
+  # If the FQDN is already within the AD domain (e.g. set automatically by DHCP/
+  # cloud-init), leave it alone rather than rewriting and risking breakage.
+  case "$current" in
+    *".$AD_DOMAIN")
+      echo "[INFO] FQDN already within $AD_DOMAIN ($current) — leaving as-is"
+      return 0
+      ;;
+  esac
+  echo "[INFO] Setting FQDN to $fqdn for AD join (was: $current)"
+  hostnamectl set-hostname "$fqdn"
+  # Map the FQDN locally so hostname -f and adcli resolve it even when the forward
+  # A record has not propagated yet in AD DNS.
+  if ! grep -qE "\b$fqdn\b" /etc/hosts; then
+    echo "127.0.1.1 $fqdn ${{short,,}}" >>/etc/hosts
   fi
+}}
+
+configure_krb5_realm() {{
+  # Write a minimal krb5 default_realm ONLY when none is configured anywhere — active in
+  # /etc/krb5.conf or any conf.d snippet. RHEL/OL ship it commented out, and adcli can
+  # fail with "Configuration file does not specify default realm" when the realm cannot
+  # be resolved from the system config. This is idempotent insurance: if the system (or a
+  # previous run, an image bake, or krb5-user on Debian) already set a realm, it is left
+  # untouched so a working configuration is never clobbered.
+  local existing
+  existing=$(grep -hE '^[[:space:]]*default_realm[[:space:]]*=' /etc/krb5.conf /etc/krb5.conf.d/*.conf 2>/dev/null | head -1 || true)
+  if [ -n "$existing" ]; then
+    echo "[INFO] krb5 default_realm already configured ($existing) — leaving as-is"
+    return 0
+  fi
+  local realm
+  realm=$(echo "$AD_DOMAIN" | tr '[:lower:]' '[:upper:]')
+  echo "[INFO] No krb5 default_realm found — writing: $realm"
+  mkdir -p /etc/krb5.conf.d
+  printf '[libdefaults]\n    default_realm = %s\n[domain_realm]\n    .%s = %s\n    %s = %s\n' \
+    "$realm" "$AD_DOMAIN" "$realm" "$AD_DOMAIN" "$realm" >/etc/krb5.conf.d/kasm-ad.conf
 }}
 
 sync_time() {{
@@ -379,8 +416,9 @@ install_ad_join() {{
     return
   fi
   install_ad_dependencies
+  set_domain_fqdn
   configure_dns_for_ad
-  pin_dc_host
+  configure_krb5_realm
   sync_time
   test_domain_resolution
   join_domain
