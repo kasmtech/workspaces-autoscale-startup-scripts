@@ -17,6 +17,12 @@ AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password f
 # redundancy: "192.168.1.1 192.168.1.2" or omit to rely on preconfigured DNS.
 AD_DNS_SERVER=""                            # e.g. "192.168.100.6" or "192.168.100.6 192.168.100.7"
 
+# Optional: pin the Domain Controller hostname to its IP in /etc/hosts. Use when the DC's
+# A record is not resolvable at join time (e.g. split-horizon DNS, or a DC that serves SRV
+# records but not its own forward A record). Leave empty to skip; both must be set to apply.
+AD_DC_HOSTNAME=""                           # e.g. "dc01.example.core"
+AD_DC_IP=""                                 # e.g. "192.168.100.6"
+
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -77,8 +83,21 @@ apt_wait() {{
   fuser -v /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock || true
 }}
 
+# apt-get update does not honor DPkg::Lock::Timeout, and boot-time unattended-upgrades
+# (apt-daily-upgrade) can take the dpkg lock between our apt_wait check and the call.
+# Keep the timeout for install/upgrade ops and retry the whole command to ride out a
+# lock held by a concurrent apt process at boot.
 apt() {{
-  command apt-get -o DPkg::Lock::Timeout=600 "$@"
+  local n
+  for n in $(seq 1 10); do
+    if command apt-get -o DPkg::Lock::Timeout=600 "$@"; then
+      return 0
+    fi
+    echo "[WARN] apt-get failed (attempt $n/10); retrying in 30s..." >&2
+    sleep 30
+  done
+  echo "[ERROR] apt-get failed after 10 attempts: $*" >&2
+  return 1
 }}
 
 install_xfce() {{
@@ -272,6 +291,18 @@ _configure_dns_resolv_conf() {{
   fi
 }}
 
+pin_dc_host() {{
+  [ -z "$AD_DC_HOSTNAME" ] && return 0
+  [ -z "$AD_DC_IP" ] && return 0
+  if ! grep -qE "^\s*$AD_DC_IP\s+$AD_DC_HOSTNAME\b" /etc/hosts; then
+    echo "[INFO] Pinning $AD_DC_HOSTNAME -> $AD_DC_IP in /etc/hosts"
+    AD_DC_SHORTNAME=$(echo "$AD_DC_HOSTNAME" | cut -d'.' -f1)
+    echo "$AD_DC_IP $AD_DC_HOSTNAME $AD_DC_SHORTNAME" >>/etc/hosts
+  else
+    echo "[INFO] Hosts pin already present for $AD_DC_HOSTNAME"
+  fi
+}}
+
 sync_time() {{
   echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
   systemctl enable --now chrony
@@ -292,10 +323,13 @@ test_domain_resolution() {{
   if [ -n "$AD_DNS_SERVER" ]; then
     dig_server="@${{AD_DNS_SERVER%% *}}"
   fi
-  dig +short $dig_server "_ldap._tcp.$AD_DOMAIN" SRV | grep -q '.' || {{
-    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN — check AD_DNS_SERVER" >&2
+  local srv_query="_ldap._tcp.$AD_DOMAIN"
+  if ! dig +short +time=5 +tries=2 $dig_server "$srv_query" SRV | grep -q '.'; then
+    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN via ${{AD_DNS_SERVER:-system resolver}}" >&2
+    echo "[ERROR] timed out => 53 blocked/unreachable; SERVFAIL/REFUSED => wrong server/zone; NXDOMAIN => records missing" >&2
+    dig +time=5 +tries=2 $dig_server "$srv_query" SRV 2>&1 | sed 's/^/[dig] /' >&2
     exit 1
-  }}
+  fi
   realm discover "$AD_DOMAIN" >/dev/null || {{
     echo "[ERROR] realm discovery failed for $AD_DOMAIN" >&2
     exit 1
@@ -350,6 +384,7 @@ install_ad_join() {{
   fi
   install_ad_dependencies
   configure_dns_for_ad
+  pin_dc_host
   sync_time
   test_domain_resolution
   join_domain
