@@ -83,10 +83,6 @@ apt_wait() {{
   fuser -v /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock || true
 }}
 
-# apt-get update does not honor DPkg::Lock::Timeout, and boot-time unattended-upgrades
-# (apt-daily-upgrade) can take the dpkg lock between our apt_wait check and the call.
-# Keep the timeout for install/upgrade ops and retry the whole command to ride out a
-# lock held by a concurrent apt process at boot.
 apt() {{
   local n
   for n in $(seq 1 10); do
@@ -243,7 +239,7 @@ install_kds() {{
 
 install_ad_dependencies() {{
   echo "[INFO] Installing AD dependencies"
-  apt-get install -y \
+  apt install -y \
     realmd sssd sssd-tools adcli \
     krb5-user libpam-modules \
     samba-common-bin dnsutils \
@@ -395,8 +391,8 @@ install_ad_join() {{
 apt_wait
 sleep 10
 apt_wait
-apt-get update || exit 1
-apt-get install -y wget curl || exit 1
+apt update || exit 1
+apt install -y wget curl || exit 1
 
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
   configure_iptables
