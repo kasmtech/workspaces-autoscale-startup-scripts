@@ -23,7 +23,11 @@ echo "[INFO] Detected OS: $OS_ID $OS_CODENAME"
 configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
-  if systemctl is-active --quiet ufw; then
+  # `systemctl is-active ufw` only means the unit is active, NOT that ufw is
+  # enforcing. On a clean Ubuntu 24.04 OCI image the ufw service is active while
+  # `ufw status` is "inactive" and iptables is the real firewall — so gate on ufw
+  # actually enforcing, otherwise fall through to the iptables branch.
+  if systemctl is-active --quiet ufw && timeout 30 ufw status 2>/dev/null | grep -q '^Status: active$'; then
     UFW_READY=0
     for i in $(seq 1 20); do
       if timeout 30 ufw status >/dev/null 2>&1; then
