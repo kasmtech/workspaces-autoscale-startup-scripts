@@ -391,8 +391,8 @@ install_ad_join() {{
 apt_wait
 sleep 10
 apt_wait
-apt update || exit 1
-apt install -y wget curl || exit 1
+apt update
+apt install -y wget curl
 
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
   configure_iptables
