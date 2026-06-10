@@ -23,6 +23,12 @@ AD_DNS_SERVER=""                            # e.g. "192.168.100.6" or "192.168.1
 AD_DC_HOSTNAME=""                           # e.g. "dc01.example.core"
 AD_DC_IP=""                                 # e.g. "192.168.100.6"
 
+# Set the machine's FQDN to <shortname>.<AD_DOMAIN> before joining. Required for the
+# self-join to be allowed to write its own <AD_DOMAIN> SPNs (AD validated writes only
+# permit SPNs matching dNSHostName). Without this, cloud-provider FQDNs (e.g.
+# *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
+SET_DOMAIN_FQDN=1
+
 
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
@@ -303,6 +309,30 @@ install_ad_dependencies() {{
     chrony
 }}
 
+set_domain_fqdn() {{
+  # Make the host's FQDN <shortname>.<AD_DOMAIN> before joining. adcli derives
+  # dNSHostName and the SPN set from the FQDN; AD's self-join "validated write"
+  # only allows SPNs matching dNSHostName, so a cloud-provider FQDN (e.g.
+  # *.oraclevcn.com) triggers CONSTRAINT_ATT_TYPE on servicePrincipalName and the
+  # <AD_DOMAIN> SPNs/keytab entries are silently lost.
+  [ "$SET_DOMAIN_FQDN" -eq 1 ] || return 0
+  local short fqdn current
+  short=$(hostname -s)
+  fqdn="${{short,,}}.${{AD_DOMAIN}}"
+  current=$(hostname -f 2>/dev/null || hostname)
+  if [ "$current" != "$fqdn" ]; then
+    echo "[INFO] Setting FQDN to $fqdn for AD join (was: $current)"
+    hostnamectl set-hostname "$fqdn"
+    # Map the FQDN locally so hostname -f and adcli resolve it even when the
+    # forward A record does not exist yet in AD DNS.
+    if ! grep -qE "\b$fqdn\b" /etc/hosts; then
+      echo "127.0.1.1 $fqdn ${{short,,}}" >>/etc/hosts
+    fi
+  else
+    echo "[INFO] FQDN already set to $fqdn"
+  fi
+}}
+
 configure_dns_for_ad() {{
   if [ -z "$AD_DNS_SERVER" ]; then
     echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
@@ -354,6 +384,59 @@ pin_dc_host() {{
   else
     echo "[INFO] Hosts pin already present for $AD_DC_HOSTNAME"
   fi
+}}
+
+configure_krb5_realm() {{
+  # adcli's GSS-SPNEGO SASL bind reads the system krb5 config to learn which realm to
+  # authenticate against. RHEL/OL 9 ship default_realm commented out and rely on DNS
+  # inference; when the DC's records are non-standard (the case that needs pin_dc_host),
+  # that inference fails with "Configuration file does not specify default realm" and the
+  # join aborts as a misleading "Insufficient permissions". Set the realm explicitly.
+  #
+  # rdns: realmd hands adcli the DC as a raw IP (--domain-controller <ip>). The
+  # GSS-SPNEGO bind must request a ticket for ldap/<name>; RHEL/OL ship rdns=false,
+  # so the principal becomes ldap/<ip>, which has no SPN in AD, failing with
+  # "Server not found in Kerberos database". rdns=true lets the IP reverse-resolve
+  # via the pin_dc_host /etc/hosts entry to the DC's real name. Our includedir-based
+  # snippet is parsed before the distro [libdefaults], so these values win.
+  local realm
+  realm=$(echo "$AD_DOMAIN" | tr '[:lower:]' '[:upper:]')
+  echo "[INFO] Writing krb5 default realm: $realm"
+
+  # Belt-and-braces: also set default_realm directly in /etc/krb5.conf, since
+  # tooling that builds private krb5 configs may not traverse the conf.d includedir.
+  if grep -qE '^\s*#?\s*default_realm\b' /etc/krb5.conf 2>/dev/null; then
+    sed -i -E "s|^\s*#?\s*default_realm\b.*|    default_realm = ${{realm}}|" /etc/krb5.conf
+  elif grep -q '^\[libdefaults\]' /etc/krb5.conf 2>/dev/null; then
+    sed -i "/^\[libdefaults\]/a\\    default_realm = ${{realm}}" /etc/krb5.conf
+  else
+    printf '[libdefaults]\n    default_realm = %s\n' "$realm" >>/etc/krb5.conf
+  fi
+
+  if ! grep -q '^\s*includedir\s\+/etc/krb5.conf.d' /etc/krb5.conf 2>/dev/null; then
+    printf 'includedir /etc/krb5.conf.d/\n' >>/etc/krb5.conf
+  fi
+  mkdir -p /etc/krb5.conf.d
+  {{
+    echo "[libdefaults]"
+    echo "    default_realm = $realm"
+    echo "    dns_lookup_realm = false"
+    echo "    dns_lookup_kdc = true"
+    echo "    rdns = true"
+    echo "    dns_canonicalize_hostname = fallback"
+    echo "[domain_realm]"
+    echo "    .$AD_DOMAIN = $realm"
+    echo "    $AD_DOMAIN = $realm"
+    # Pin the KDC to AD_DC_IP when provided so Kerberos reaches the same reachable IP as
+    # pin_dc_host, rather than an unroutable DC A record.
+    if [ -n "$AD_DC_IP" ]; then
+      echo "[realms]"
+      echo "    $realm = {{"
+      echo "        kdc = $AD_DC_IP"
+      echo "        admin_server = $AD_DC_IP"
+      echo "    }}"
+    fi
+  }} >/etc/krb5.conf.d/kasm-ad.conf
 }}
 
 sync_time() {{
@@ -437,8 +520,10 @@ install_ad_join() {{
     return
   fi
   install_ad_dependencies
+  set_domain_fqdn
   configure_dns_for_ad
   pin_dc_host
+  configure_krb5_realm
   sync_time
   test_domain_resolution
   join_domain
