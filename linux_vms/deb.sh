@@ -17,37 +17,32 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # Detect OS — used by install_kasmvnc to select the right package
 . /etc/os-release
 OS_ID="$ID"
-OS_CODENAME="$VERSION_CODENAME"
+OS_CODENAME="${{VERSION_CODENAME:-}}"
 echo "[INFO] Detected OS: $OS_ID $OS_CODENAME"
 
 configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
-  # `systemctl is-active ufw` only means the unit is active, NOT that ufw is
-  # enforcing. On a clean Ubuntu 24.04 OCI image the ufw service is active while
-  # `ufw status` is "inactive" and iptables is the real firewall — so gate on ufw
-  # actually enforcing, otherwise fall through to the iptables branch.
+  # Use ufw only when it is actively enforcing; otherwise manage iptables directly.
   if systemctl is-active --quiet ufw && timeout 30 ufw status 2>/dev/null | grep -q '^Status: active$'; then
     UFW_READY=0
-    for i in $(seq 1 20); do
+    for i in $(seq 1 5); do
       if timeout 30 ufw status >/dev/null 2>&1; then
         UFW_READY=1
         break
       fi
-      echo "[WARN] ufw unresponsive (attempt $i/20); waiting..."
-      if [ "$i" -ge 3 ]; then
-        echo "[WARN] Restarting ufw after $i failed attempts"
-        systemctl restart ufw || true
-      fi
+      # Wait for ufw rather than restarting it, which could disrupt its startup.
+      echo "[WARN] ufw unresponsive (attempt $i/5); waiting for it to come up..."
       sleep 30
     done
     if [ "$UFW_READY" -eq 0 ]; then
-      echo "[ERROR] ufw did not become ready after 20 attempts; skipping port rules" >&2
-    else
-      if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 ufw allow 3389/tcp || true; fi
-      if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 ufw allow 4902/tcp || true; fi
-      if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 ufw allow 5902/tcp || true; fi
+      # Fail rather than ship an unreachable instance with no port rules applied.
+      echo "[ERROR] ufw did not become ready after 5 attempts" >&2
+      exit 1
     fi
+    if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 ufw allow 3389/tcp || true; fi
+    if [ "$ENABLE_KDS"     -eq 1 ]; then timeout 30 ufw allow 4902/tcp || true; fi
+    if [ "$ENABLE_KASMVNC" -eq 1 ]; then timeout 30 ufw allow 5902/tcp || true; fi
   else
     apt install -y iptables netfilter-persistent
 
@@ -219,25 +214,25 @@ install_kds() {{
 apt_wait
 sleep 10
 apt_wait
-apt update || exit 1
-apt install -y wget || exit 1
+apt update
+apt install -y wget
 
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
-  configure_iptables || exit 1
+  configure_iptables
 fi
 
-install_xfce || exit 1
+install_xfce
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
-  install_kasmvnc || exit 1
+  install_kasmvnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
-  install_xrdp || exit 1
+  install_xrdp
 fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
-  install_kds || exit 1
+  install_kds
 fi
 
 echo "===== KASM DEB INSTALL COMPLETED $(date) ====="

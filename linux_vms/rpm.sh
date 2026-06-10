@@ -17,12 +17,11 @@ exec > >(stdbuf -oL -eL tee -a "$LOG_FILE") 2>&1
 # Detect OS — used by install_epel and install_kasmvnc
 . /etc/os-release
 OS_ID="$ID"
-OS_MAJOR=$(echo "$VERSION_ID" | cut -d'.' -f1)
+OS_MAJOR=$(echo "${{VERSION_ID:-}}" | cut -d'.' -f1)
 echo "[INFO] Detected OS: $OS_ID $OS_MAJOR"
 
-# Wrap every dnf call so it waits for the package-manager lock (held by
-# oracle-cloud-agent plugin installs and Oracle Autonomous Linux auto-patching at
-# boot) instead of hanging indefinitely or aborting. Also retries flaky downloads.
+# Wait for the package-manager lock (held during boot-time auto-patching) and
+# retry transient download failures.
 dnf() {{
   command dnf --setopt=lock_timeout=600 --setopt=retries=10 "$@"
 }}
@@ -31,20 +30,21 @@ configure_iptables() {{
   echo "[INFO] Adding firewall rules at $(date)"
 
   if systemctl is-active --quiet firewalld; then
-    # firewall-cmd talks to firewalld over D-Bus, which is unreliable early in boot
-    # on Oracle (Autonomous) Linux: the daemon reports active(running) yet
-    # firewall-cmd hangs on every D-Bus call, and restarting the daemon does not
-    # clear it. Configure the firewall WITHOUT D-Bus instead: stop firewalld, write
-    # the ports straight to the permanent config with firewall-offline-cmd (no daemon
-    # / no D-Bus needed), then start it so it loads them on boot. Deterministic.
+    # firewall-cmd hangs on D-Bus early in boot on Oracle Linux, so we avoid it and
+    # let firewall-offline-cmd be the sole authority modifying the permanent config.
+    # The daemon must be stopped first: this prevents runtime/permanent state from
+    # diverging and avoids any requirement for a subsequent D-Bus-based reload. Enable
+    # before stopping to keep the window without active rules as short as possible.
+    # NOTE: if firewall behaviour regresses, revisit this stop -> offline -> start
+    # sequence (and the enable-before-stop ordering) before changing anything else.
+    systemctl enable firewalld || true
     systemctl stop firewalld || true
 
     if [ "$ENABLE_XRDP"    -eq 1 ]; then firewall-offline-cmd --add-port=3389/tcp || true; fi
     if [ "$ENABLE_KDS"     -eq 1 ]; then firewall-offline-cmd --add-port=4902/tcp || true; fi
     if [ "$ENABLE_KASMVNC" -eq 1 ]; then firewall-offline-cmd --add-port=5902/tcp || true; fi
 
-    systemctl enable firewalld || true
-    systemctl start firewalld || echo "[WARN] firewalld failed to start; host firewall rules may not be active" >&2
+    systemctl start firewalld || {{ echo "[ERROR] firewalld failed to start; host firewall not active" >&2; exit 1; }}
   else
     dnf install -y iptables-services
     systemctl enable iptables
@@ -254,9 +254,8 @@ install_kds() {{
   API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
   API_PORT=443
 
-  # Bound the check-in callback: if the deployment/proxy is unreachable this would
-  # otherwise hang forever with no timeout, and the server would never check in.
-  timeout 300 /opt/kasm-desktop-service/scripts/register_wizard.sh \
+  # Bound the check-in so an unreachable deployment cannot hang boot indefinitely.
+  timeout 300 bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
     --register \
     --no-gui \
     --api-host="$API_HOST" \
@@ -272,30 +271,30 @@ install_kds() {{
 
 sleep 5
 
-dnf install -y wget || exit 1
+dnf install -y wget
 
 # iptables-services is in base/appstream repos, so firewall setup runs before EPEL is configured
 if [ "$ENABLE_IPTABLES" -eq 1 ]; then
-  configure_iptables || exit 1
+  configure_iptables
 fi
 
 if [ "$ENABLE_EPEL" -eq 1 ]; then
-  install_epel || exit 1
+  install_epel
 fi
 
-install_xfce || exit 1
+install_xfce
 install_screenshot_tools || true
 
 if [ "$ENABLE_KASMVNC" -eq 1 ]; then
-  install_kasmvnc || exit 1
+  install_kasmvnc
 fi
 
 if [ "$ENABLE_XRDP" -eq 1 ]; then
-  install_xrdp || exit 1
+  install_xrdp
 fi
 
 if [ "$ENABLE_KDS" -eq 1 ]; then
-  install_kds || exit 1
+  install_kds
 fi
 
 echo "===== KASM RPM INSTALL COMPLETED $(date) ====="
