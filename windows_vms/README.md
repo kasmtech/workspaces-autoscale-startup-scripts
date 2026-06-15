@@ -1,6 +1,6 @@
 # Windows Autoscale Scripts for Kasm Workspaces
 
-This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasm.com/docs/develop/guide/windows/auto_scaled_servers) functionality for [Kasm Workspaces](https://kasm.com/).
+This repository contains PowerShell scripts designed to enable and configure Windows features when utilizing [Windows autoscaling](https://docs.kasm.com/docs/1.19.0/guide/windows/auto_scaled_servers) functionality for [Kasm Workspaces](https://kasm.com/).
 
 ## Features
 - Kasm Windows Desktop Service - Install and register the Kasm Desktop Service
@@ -12,7 +12,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 - VMware Instant Clone - Reinitialize cloned VM identity
 
 ## Compatibility
-![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.18.1%20%7C%201.18.0-blue?style=flat-square)
+![Kasm Workspaces](https://img.shields.io/badge/Kasm%20Workspaces-1.19.0-blue?style=flat-square)
 
 | Provider                                                                                                               | ![Windows 10](https://custom-icon-badges.demolab.com/badge/Windows_10-0078D6?logo=windows11&logoColor=white) | ![Windows 11](https://custom-icon-badges.demolab.com/badge/Windows_11-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2022](https://custom-icon-badges.demolab.com/badge/Windows_Server_2022-0078D6?logo=windows11&logoColor=white) | ![Windows Server 2025](https://custom-icon-badges.demolab.com/badge/Windows_Server_2025-0078D6?logo=windows11&logoColor=white) |
 |------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------:|
@@ -27,7 +27,7 @@ This repository contains PowerShell scripts designed to enable and configure Win
 | ![vSphere](https://img.shields.io/badge/-VMware_vSphere-607078?style=flat&logo=vmware&logoColor=white)                 |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                       ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                        |                                    ![Verified](https://img.shields.io/badge/Verified-green)                                    |                                ![Not Verified](https://img.shields.io/badge/Not_Verified-gray)                                 |
  
 ## Dependencies
-[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-develop-blue?style=flat-square)](https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html#installation)
+[![Kasm Desktop Service](https://img.shields.io/badge/Kasm%20Desktop%20Service-1.8-blue?style=flat-square)](https://docs.kasmweb.com/docs/develop/guide/windows/windows_service.html#installation)
 [![WinFsp](https://img.shields.io/badge/WinFsp-2.0.23075-blue?style=flat-square)](https://winfsp.dev/)
 [![FSLogix](https://img.shields.io/badge/FSLogix-latest-blue?style=flat-square)](https://learn.microsoft.com/fslogix/)
 
@@ -42,7 +42,7 @@ Special placeholder tokens (ex: `{some_variable}`) can be used in the Startup Sc
 ```powershell
 <powershell>
 
-$Version = "develop"
+$Version = "1.19.0"
 $StartupScriptArchive = "kasm-windows-startup.zip"
 $StartupScriptUrl = "https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/$Version/$StartupScriptArchive"
 $WorkingDirectory = "$($Env:Temp)"
@@ -73,7 +73,7 @@ Write-Output "Executing $InitScript"
 ```
 
 ### Kasm Windows Desktop Service
-The [Kasm Windows Desktop Service]("https://docs.kasm.com/docs/develop/guide/windows/windows_service") provides additional capabilities to users that are connected to the desktop through Kasm Workspaces. To utilize these features the Desktop Service must be installed and registered with Kasm Workspaces. 
+The [Kasm Windows Desktop Service]("https://docs.kasm.com/docs/1.19.0/guide/windows/windows_service") provides additional capabilities to users that are connected to the desktop through Kasm Workspaces. To utilize these features the Desktop Service must be installed and registered with Kasm Workspaces. 
 
 | Varible              | Required     | Type   |  Description     |
 |----------------------|--------------|--------|-----------------|
@@ -106,7 +106,7 @@ This startup script package will automatically enable the Windows Audio service 
 ```
 
 ### Domain Join
-Connect a computer to an Active Directory domain. Additional setup information for domain joining Kasm autoscaled VMs can be found [here](https://docs.kasm.com/docs/develop/guide/windows/auto_scaled_servers).
+Connect a computer to an Active Directory domain. Additional setup information for domain joining Kasm autoscaled VMs can be found [here](https://docs.kasm.com/docs/1.19.0/guide/windows/auto_scaled_servers).
 
 | Varible                    | Required     | Type   | Description                                                                                                                                                                                                                                                                                                                          |
 |----------------------------|--------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

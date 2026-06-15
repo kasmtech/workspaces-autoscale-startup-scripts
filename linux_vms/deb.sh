@@ -205,8 +205,8 @@ install_kds() {{
 
   ARCH=$(dpkg --print-architecture)
   case "$ARCH" in
-    amd64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb" ;;
-    arm64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb" ;;
+    amd64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/8e3b288d3732c758aa49b01dbf33e5ad864f3d02/kasm-desktop-service_1.8_amd64.deb" ;;
+    arm64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/8e3b288d3732c758aa49b01dbf33e5ad864f3d02/kasm-desktop-service_1.8_arm64.deb" ;;
     *) echo "[ERROR] Unsupported architecture: $ARCH" >&2; exit 1 ;;
   esac
 
