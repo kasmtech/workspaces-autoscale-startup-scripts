@@ -15,5 +15,23 @@ Kasm Workspaces can auto-scale [Docker Agents](https://www.kasmweb.com/docs/late
 
 - [Docker Agent Startup Scripts](./docker_agents)
 
+## Startup Script Size Limits
+
+Each VM provider caps how large a startup script (user data) can be. Larger scripts are
+hosted and downloaded by a small bootstrap instead of pasted in full.
+
+| Platform | Limit |
+|----------|-------|
+| AWS (EC2) | 16 KB (16,384 bytes), tightest of all |
+| OCI (Oracle Cloud) | 16 KB user data (32 KB total with other metadata) |
+| Azure | 64 KB |
+| DigitalOcean | 64 KiB |
+| OpenStack | 64 KB |
+| vSphere | 64,000 bytes |
+| GCP | 256 KB |
+| Nutanix, Proxmox, KubeVirt, Harvester | No fixed cap; user data is delivered via a mounted disk / snippet / Kubernetes Secret, not a small metadata field |
+
+> Figures vary by region/API version; confirm against current provider docs.
+
 
 

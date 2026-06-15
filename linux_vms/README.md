@@ -25,6 +25,54 @@ VARIABLE="This is an example of curly brackets being escaped in a script."
 echo "${{VARIABLE}}"
 ```
 
+## Deployment: hosted scripts + bootstrap
+
+`deb.sh` / `rpm.sh` are downloaded at boot by a small bootstrap instead of being pasted in
+full into the VM Provider startup field. This keeps the startup script tiny and works the
+same way on every provider, matching the Windows scripts.
+
+**Paste [`bootstrap.sh`](./bootstrap.sh) into the VM Provider → "Startup Script" field.**
+It is ~2 KB and:
+
+1. Receives Kasm's per-instance values (`{checkin_jwt}`, `{upstream_auth_address}`, …),
+   substituted **only** in this field, and exports them as `KASM_*` environment variables.
+2. Detects the distro family from `/etc/os-release` and downloads `deb.sh` (Debian/Ubuntu)
+   or `rpm.sh` (Oracle Linux / RHEL and derivatives).
+3. Runs the downloaded script, which reads those `KASM_*` variables.
+
+Set `VERSION` in `bootstrap.sh` to the release you want to run.
+
+Because the per-instance values live in the bootstrap and are passed via the environment,
+**the downloaded scripts contain no secrets**: no JWT, password, or OTP is baked into the
+hosted file. The downloaded copies read each value as `${{KASM_*:-}}`; the scripts in this
+folder keep a placeholder fallback so they also work if pasted directly.
+
+### Overriding feature flags from the bootstrap
+
+Because the scripts are downloaded rather than pasted, you change behavior from the
+bootstrap instead of editing them. Each flag reads a matching `KASM_*` env var (an
+"Optional feature overrides" block is in `bootstrap.sh`, commented out); anything you
+leave unset keeps the script default.
+
+| Bootstrap env var | Script flag | Default | Notes |
+|-------------------|-------------|---------|-------|
+| `KASM_ENABLE_KASMVNC` | `ENABLE_KASMVNC` | `0` | Install/configure KasmVNC |
+| `KASM_ENABLE_XRDP` | `ENABLE_XRDP` | `1` | Install/configure xrdp |
+| `KASM_ENABLE_KDS` | `ENABLE_KDS` | `1` | Install/register Kasm Desktop Service |
+| `KASM_ENABLE_IPTABLES` | `ENABLE_IPTABLES` | `1` | Open required firewall ports |
+| `KASM_ENABLE_EPEL` | `ENABLE_EPEL` | `1` | **`rpm.sh` only** (Oracle Linux / RHEL) |
+| `KASM_ENABLE_AD_JOIN` | `ENABLE_AD_JOIN` | `0` | Join Active Directory |
+| `KASM_SET_DOMAIN_FQDN` | `SET_DOMAIN_FQDN` | `1` | Set `<shortname>.<domain>` FQDN before AD join |
+| `KASM_AD_DNS_SERVER` | `AD_DNS_SERVER` | _(empty)_ | Space-separated DC / AD DNS server IPs |
+
+Flags are `1` (on) / `0` (off). Example, enabling AD join with explicit DNS servers (the
+`KASM_DOMAIN` / `KASM_AD_JOIN_CREDENTIAL` values are already supplied from Kasm tokens):
+
+```bash
+export KASM_ENABLE_AD_JOIN=1
+export KASM_AD_DNS_SERVER="192.168.1.10 192.168.1.11"
+```
+
 ## Examples
 
 ### Debian / Ubuntu — [deb.sh](./deb.sh)

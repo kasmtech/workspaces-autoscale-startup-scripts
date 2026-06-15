@@ -1,27 +1,39 @@
 #!/usr/bin/env bash
+# TEMPLATE NOTE: Python str.format() template. All brace patterns are intentional, do not alter.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-ENABLE_KASMVNC=0
-ENABLE_XRDP=1
-ENABLE_KDS=1
-ENABLE_IPTABLES=1
-ENABLE_AD_JOIN=0
+# Feature flags. Override any of these from the bootstrap via the matching KASM_* env
+# var (e.g. export KASM_ENABLE_AD_JOIN=1). Unset falls back to the default shown.
+ENABLE_KASMVNC="${{KASM_ENABLE_KASMVNC:-0}}"
+ENABLE_XRDP="${{KASM_ENABLE_XRDP:-1}}"
+ENABLE_KDS="${{KASM_ENABLE_KDS:-1}}"
+ENABLE_IPTABLES="${{KASM_ENABLE_IPTABLES:-1}}"
+ENABLE_AD_JOIN="${{KASM_ENABLE_AD_JOIN:-0}}"
 
-# Provided by Kasm autoscale
-AD_DOMAIN="{domain}"
-AD_JOIN_PASSWORD="{ad_join_credential}"     # Kasm-generated one-time password for the machine account
+# Values provided by Kasm autoscale. When pasted directly, Kasm substitutes these
+# placeholders into the script. When the script is hosted, bootstrap.sh exports them as
+# KASM_* environment variables (those take precedence); the placeholder fallback is used
+# only when the script is pasted directly.
+KASM_UPSTREAM_AUTH_ADDRESS="${{KASM_UPSTREAM_AUTH_ADDRESS:-{upstream_auth_address}}}"
+KASM_CHECKIN_JWT="${{KASM_CHECKIN_JWT:-{checkin_jwt}}}"
+KASM_CONNECTION_USERNAME="${{KASM_CONNECTION_USERNAME:-{connection_username}}}"
+KASM_CONNECTION_PASSWORD="${{KASM_CONNECTION_PASSWORD:-{connection_password}}}"
+
+# AD join (only used when ENABLE_AD_JOIN=1)
+AD_DOMAIN="${{KASM_DOMAIN:-{domain}}}"
+AD_JOIN_PASSWORD="${{KASM_AD_JOIN_CREDENTIAL:-{ad_join_credential}}}"     # Kasm one-time machine-account password
 
 # Optional: space-separated list of AD DNS servers (Domain Controller IPs) for SRV record
 # resolution. Leave empty to use existing VNET/DHCP DNS configuration. Recommended for
 # redundancy: "192.168.1.1 192.168.1.2" or omit to rely on preconfigured DNS.
-AD_DNS_SERVER=""                            # e.g. "192.168.100.6" or "192.168.100.6 192.168.100.7"
+AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="192.168.100.6 192.168.100.7"
 
 # Set the machine's FQDN to <shortname>.<AD_DOMAIN> before joining. Required for the
 # self-join to be allowed to write its own <AD_DOMAIN> SPNs (AD validated writes only
 # permit SPNs matching dNSHostName). Without this, cloud-provider FQDNs (e.g.
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
-SET_DOMAIN_FQDN=1
+SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
 
 LOG_FILE="/var/log/kasm_install.log"
@@ -122,8 +134,8 @@ install_kasmvnc() {{
     BUILD_URL="https://github.com/kasmtech/KasmVNC/releases/download/v1.4.0/kasmvncserver_${{KASMVNC_DISTRO}}_1.4.0_arm64.deb"
   fi
 
-  KASM_VNC_PASSWD="{connection_password}"
-  KASM_VNC_USER="{connection_username}"
+  KASM_VNC_PASSWD="$KASM_CONNECTION_PASSWORD"
+  KASM_VNC_USER="$KASM_CONNECTION_USERNAME"
 
   wget "$BUILD_URL" -O kasmvncserver.deb
   apt install -y gettext ssl-cert libxfont2
@@ -218,9 +230,9 @@ install_kds() {{
 
   sleep 2
 
-  KASM_HOST_NAME="{upstream_auth_address}"
-  REG_TOKEN="{checkin_jwt}"
-  API_HOST=$(echo "$KASM_HOST_NAME" | sed -E 's@^https?://@@' | cut -d'/' -f1 | cut -d':' -f1)
+  KASM_HOST_NAME="$KASM_UPSTREAM_AUTH_ADDRESS"
+  REG_TOKEN="$KASM_CHECKIN_JWT"
+  API_HOST=$(echo "$KASM_HOST_NAME" | cut -d'/' -f1 | cut -d':' -f1)
   API_PORT=443
 
   timeout 300 bash /opt/kasm-desktop-service/scripts/register_wizard.sh \
@@ -400,7 +412,7 @@ kasm_checkin() {{
   if curl -k -fsS -X POST \
       -H "Content-Type: application/json" \
       --data '{{"status":"running","status_message":"Startup complete","status_progress":"100"}}' \
-      "https://{upstream_auth_address}/api/set_server_status?token={checkin_jwt}"; then
+      "https://$KASM_UPSTREAM_AUTH_ADDRESS/api/set_server_status?token=$KASM_CHECKIN_JWT"; then
     echo "[INFO] Kasm check-in successful"
   else
     echo "[ERROR] Kasm check-in failed — server may not be marked ready in Kasm UI" >&2
