@@ -90,6 +90,17 @@ Xfce and xrdp are not included in the default repositories for Oracle Linux or R
 
 If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
 
+## AWS EC2 — user data size limit
+
+AWS EC2 enforces a **hard 16,384-byte (16 KiB) limit on instance user data** — it is not
+an adjustable quota. The scripts above exceed (or sit right at) that limit once Kasm
+substitutes the template variables, so they cannot be pasted directly into an EC2
+autoscale user-data field. Stripped-down copies that fit are in
+[`aws_scripts/`](./aws_scripts/) — see that folder's [README](./aws_scripts/README.md)
+for details and the more robust alternatives (gzip / host + download). Every other
+provider Kasm autoscale supports (Azure, GCP, OCI, DigitalOcean) has a much larger limit
+and should keep using the canonical scripts above.
+
 ## AD Domain Join — Autoscale Configuration Notes
 
 When using AD join with autoscale:
