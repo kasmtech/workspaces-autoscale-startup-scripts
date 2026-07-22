@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-VERSION="1.19.0"
+VERSION="develop"
 BASE_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm-autoscale-scripts/$VERSION"
 
 # Per-instance values from Kasm. Substituted here only; the downloaded script reads them
