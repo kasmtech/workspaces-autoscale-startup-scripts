@@ -41,18 +41,27 @@ ensure_downloader() {{
     return 0
   fi
   echo "[INFO] No curl/wget found; installing curl"
-  case "$SCRIPT" in
-    deb.sh) apt-get update && apt-get install -y curl ;;
-    rpm.sh) dnf install -y curl || yum install -y curl ;;
-  esac
+  export DEBIAN_FRONTEND=noninteractive
+  local n
+  for n in $(seq 1 10); do
+    if [ "$SCRIPT" = "deb.sh" ]; then
+      if apt-get update && apt-get install -y curl; then return 0; fi
+    else
+      if dnf install -y curl || yum install -y curl; then return 0; fi
+    fi
+    echo "[WARN] installing curl failed (attempt $n/10); retrying in 10s..." >&2
+    sleep 10
+  done
+  echo "[ERROR] could not install curl after 10 attempts" >&2
+  exit 1
 }}
 ensure_downloader
 
 cd /tmp
 echo "[INFO] Downloading $BASE_URL/$SCRIPT"
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$BASE_URL/$SCRIPT" -o "$SCRIPT"
+  curl -fsSL --retry 5 --retry-connrefused --retry-delay 5 --max-time 60 "$BASE_URL/$SCRIPT" -o "$SCRIPT"
 else
-  wget -q -O "$SCRIPT" "$BASE_URL/$SCRIPT"
+  wget -q --tries=5 --waitretry=5 --timeout=60 -O "$SCRIPT" "$BASE_URL/$SCRIPT"
 fi
 exec bash "$SCRIPT"

@@ -34,7 +34,8 @@ for name in deb rpm; do
     exit 1
   fi
   # Fail if any unrendered template artifact slipped through.
-  if grep -nE '\{\{|\}\}|\{(domain|ad_join_credential|connection_password|connection_username|upstream_auth_address|checkin_jwt)\}' "$dst"; then
+  token_pattern=$(IFS='|'; echo "${TOKENS[*]}")
+  if grep -nE "\\{\\{|\\}\\}|\\{($token_pattern)\\}" "$dst"; then
     echo "[ERROR] unrendered template artifacts remain in $name.sh (see above)" >&2
     exit 1
   fi
