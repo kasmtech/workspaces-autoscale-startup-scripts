@@ -39,19 +39,19 @@ AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="19
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
 SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
-# Logging: DEBUG < INFO < WARN < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
+# Logging: DEBUG < INFO < WARNING < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
 # level that is written to the local log and forwarded to Kasm Workspaces.
 LOG_LEVEL="${{KASM_LOG_LEVEL:-INFO}}"
 LOG_LEVEL="$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')"
 
 _log_level_num() {{
   case "$1" in
-    DEBUG)    echo 0 ;;
-    INFO)     echo 1 ;;
-    WARN)     echo 2 ;;
-    ERROR)    echo 3 ;;
-    CRITICAL) echo 4 ;;
-    *)        echo 1 ;;
+    DEBUG)         echo 0 ;;
+    INFO)          echo 1 ;;
+    WARNING)       echo 2 ;;
+    ERROR)         echo 3 ;;
+    CRITICAL)      echo 4 ;;
+    *)             echo 1 ;;
   esac
 }}
 
@@ -127,7 +127,7 @@ log() {{
   [ "$levelnum" -ge "$threshnum" ] || return 0
 
   ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  if [ "$level" = "WARN" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
+  if [ "$level" = "WARNING" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
     printf '%s [%s] %s\n' "$ts" "$level" "$message" >&2
   else
     printf '%s [%s] %s\n' "$ts" "$level" "$message"
@@ -221,7 +221,7 @@ install_epel() {{
         || dnf config-manager --enable "codeready-builder-for-rhel-${{OS_MAJOR}}-rhui-rpms" 2>/dev/null \
         || dnf config-manager --enable crb 2>/dev/null \
         || dnf config-manager --enable powertools 2>/dev/null \
-        || log WARN "Could not enable CodeReady Builder / CRB repo — some EPEL deps may not resolve"
+        || log WARNING "Could not enable CodeReady Builder / CRB repo — some EPEL deps may not resolve"
       ;;
     *)
       log ERROR "EPEL install not supported for OS: $OS_ID"
@@ -255,7 +255,7 @@ install_screenshot_tools() {{
   if dnf install -y gnome-screenshot; then
     log INFO "gnome-screenshot installed successfully"
   else
-    log WARN "gnome-screenshot not available; screenshot API may be limited on this system"
+    log WARNING "gnome-screenshot not available; screenshot API may be limited on this system"
   fi
 }}
 
@@ -479,7 +479,7 @@ configure_dns_for_ad() {{
     log INFO "Updating connection: $nic (device: $dev)"
     nmcli connection modify "$nic" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
     nmcli connection reload
-    nmcli connection up "$nic" || log WARN "nmcli connection up failed — DNS change may not be active until next reconnect"
+    nmcli connection up "$nic" || log WARNING "nmcli connection up failed — DNS change may not be active until next reconnect"
   else
     log INFO "nmcli not available — configuring DNS via /etc/resolv.conf"
     local tmp target
@@ -526,9 +526,9 @@ sync_time() {{
   # Wait up to ~30s for chrony to contact a source before stepping. Without this,
   # makestep can fire before any NTP sample is in and realm join later fails with
   # an opaque Kerberos clock-skew error.
-  chronyc waitsync 6 0 0 5 || log WARN "chrony did not reach a source within 30s"
+  chronyc waitsync 6 0 0 5 || log WARNING "chrony did not reach a source within 30s"
   if ! chronyc makestep; then
-    log WARN "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
+    log WARNING "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
   fi
 }}
 

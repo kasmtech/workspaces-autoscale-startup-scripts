@@ -39,19 +39,19 @@ AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="19
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
 SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
-# Logging: DEBUG < INFO < WARN < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
+# Logging: DEBUG < INFO < WARNING < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
 # level that is written to the local log and forwarded to Kasm Workspaces.
 LOG_LEVEL="${{KASM_LOG_LEVEL:-INFO}}"
 LOG_LEVEL="$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')"
 
 _log_level_num() {{
   case "$1" in
-    DEBUG)    echo 0 ;;
-    INFO)     echo 1 ;;
-    WARN)     echo 2 ;;
-    ERROR)    echo 3 ;;
-    CRITICAL) echo 4 ;;
-    *)        echo 1 ;;
+    DEBUG)         echo 0 ;;
+    INFO)          echo 1 ;;
+    WARNING)       echo 2 ;;
+    ERROR)         echo 3 ;;
+    CRITICAL)      echo 4 ;;
+    *)             echo 1 ;;
   esac
 }}
 
@@ -127,7 +127,7 @@ log() {{
   [ "$levelnum" -ge "$threshnum" ] || return 0
 
   ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  if [ "$level" = "WARN" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
+  if [ "$level" = "WARNING" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
     printf '%s [%s] %s\n' "$ts" "$level" "$message" >&2
   else
     printf '%s [%s] %s\n' "$ts" "$level" "$message"
@@ -175,7 +175,7 @@ configure_iptables() {{
         break
       fi
       # Wait for ufw rather than restarting it, which could disrupt its startup.
-      log WARN "ufw unresponsive (attempt $i/5); waiting for it to come up..."
+      log WARNING "ufw unresponsive (attempt $i/5); waiting for it to come up..."
       sleep 30
     done
     if [ "$UFW_READY" -eq 0 ]; then
@@ -215,7 +215,7 @@ apt() {{
     if command apt-get -o DPkg::Lock::Timeout=600 "$@"; then
       return 0
     fi
-    log WARN "apt-get failed (attempt $n/10); retrying in 30s..."
+    log WARNING "apt-get failed (attempt $n/10); retrying in 30s..."
     sleep 30
   done
   log ERROR "apt-get failed after 10 attempts: $*"
@@ -387,7 +387,7 @@ DNS=$AD_DNS_SERVER
 Domains=~$AD_DOMAIN
 EOF
     if ! systemctl try-restart systemd-resolved; then
-      log WARN "systemd-resolved restart failed — falling back to /etc/resolv.conf"
+      log WARNING "systemd-resolved restart failed — falling back to /etc/resolv.conf"
       _configure_dns_resolv_conf
     fi
   else
@@ -468,9 +468,9 @@ sync_time() {{
   # Wait up to ~30s for chrony to contact a source before stepping. Without this,
   # makestep can fire before any NTP sample is in and realm join later fails with
   # an opaque Kerberos clock-skew error.
-  chronyc waitsync 6 0 0 5 || log WARN "chrony did not reach a source within 30s"
+  chronyc waitsync 6 0 0 5 || log WARNING "chrony did not reach a source within 30s"
   if ! chronyc makestep; then
-    log WARN "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
+    log WARNING "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
   fi
 }}
 
