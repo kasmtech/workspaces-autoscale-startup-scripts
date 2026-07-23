@@ -21,7 +21,7 @@ KASM_CONNECTION_USERNAME="${{KASM_CONNECTION_USERNAME:-{connection_username}}}"
 KASM_CONNECTION_PASSWORD="${{KASM_CONNECTION_PASSWORD:-{connection_password}}}"
 # The computer object name Kasm created for this server. Not set on every hypervisor
 # (e.g. Proxmox, VMware may not run CloudBase-Init-equivalent provisioning), so it can
-# be empty — matches Windows' -ServerName / {server_hostname} behavior exactly.
+# be empty, matches Windows' -ServerName / {server_hostname} behavior exactly.
 KASM_SERVER_HOSTNAME="${{KASM_SERVER_HOSTNAME:-{server_hostname}}}"
 
 # AD join (only used when ENABLE_AD_JOIN=1)
@@ -44,6 +44,10 @@ SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 LOG_LEVEL="${{KASM_LOG_LEVEL:-INFO}}"
 LOG_LEVEL="$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')"
 
+# TLS certificate verification for the log-forwarding request. Off by default, matching
+# Windows' -VerifyKasmApiCert switch (also off unless explicitly passed).
+VERIFY_API_CERT="${{KASM_VERIFY_API_CERT:-0}}"
+
 _log_level_num() {{
   case "$1" in
     DEBUG)         echo 0 ;;
@@ -59,12 +63,15 @@ _json_escape() {{
   local s="$1"
   s="${{s//\\/\\\\}}"
   s="${{s//\"/\\\"}}"
+  s="${{s//$'\n'/\\n}}"
+  s="${{s//$'\r'/\\r}}"
+  s="${{s//$'\t'/\\t}}"
   printf '%s' "$s"
 }}
 
 # Forward one log line to Kasm Workspaces (POST /api/component_log). Fire-and-forget:
 # runs in the background so a slow/unreachable API never delays the install. Falls
-# back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier — that
+# back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier, that
 # endpoint's exact request schema is unconfirmed, so this reuses the component_log
 # payload shape as a best-effort fallback.
 send_kasm_log() {{
@@ -72,15 +79,25 @@ send_kasm_log() {{
   command -v curl >/dev/null 2>&1 || return 0
   [ -n "${{KASM_CHECKIN_JWT:-}}" ] && [ -n "${{KASM_UPSTREAM_AUTH_ADDRESS:-}}" ] || return 0
 
-  local host msg_json body
+  local host msg_json body cert_opt
   if [ -n "$KASM_SERVER_HOSTNAME" ]; then
     host="$KASM_SERVER_HOSTNAME"
   else
     host=$(hostname 2>/dev/null || echo unknown)
   fi
+  if [ "$VERIFY_API_CERT" -eq 1 ]; then
+    cert_opt=""
+  else
+    cert_opt="-k"
+  fi
+  local token_json host_json level_json ingest_json
+  token_json=$(_json_escape "$KASM_CHECKIN_JWT")
+  host_json=$(_json_escape "$host")
+  level_json=$(_json_escape "$level")
   msg_json=$(_json_escape "$message")
+  ingest_json=$(_json_escape "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
   body=$(printf '{{"token":"%s","logs":[{{"host":"%s","application":"startup-script","levelname":"%s","message":"%s","ingest_date":"%s"}}]}}' \
-    "$KASM_CHECKIN_JWT" "$host" "$level" "$msg_json" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+    "$token_json" "$host_json" "$level_json" "$msg_json" "$ingest_json")
 
   (
     set +e
@@ -88,7 +105,7 @@ send_kasm_log() {{
     fell_back=0
     attempt=1
     while [ "$attempt" -le 3 ]; do
-      code=$(curl -k -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
+      code=$(curl $cert_opt -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
         -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null)
 
       case "$code" in
@@ -143,7 +160,7 @@ chmod 0600 "$LOG_FILE"
 echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-# Flags must be 0 or 1 — anything else (e.g. a typo'd override) fails fast here.
+# Flags must be 0 or 1, anything else (e.g. a typo'd override) fails fast here.
 validate_flag() {{
   case "$2" in
     0|1) ;;
@@ -156,8 +173,9 @@ validate_flag KASM_ENABLE_KDS "$ENABLE_KDS"
 validate_flag KASM_ENABLE_IPTABLES "$ENABLE_IPTABLES"
 validate_flag KASM_ENABLE_AD_JOIN "$ENABLE_AD_JOIN"
 validate_flag KASM_SET_DOMAIN_FQDN "$SET_DOMAIN_FQDN"
+validate_flag KASM_VERIFY_API_CERT "$VERIFY_API_CERT"
 
-# Detect OS — used by install_kasmvnc to select the right package
+# Detect OS, used by install_kasmvnc to select the right package
 . /etc/os-release
 OS_ID="$ID"
 OS_CODENAME="${{VERSION_CODENAME:-}}"
@@ -374,7 +392,7 @@ install_ad_dependencies() {{
 
 configure_dns_for_ad() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    log INFO "AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
+    log INFO "AD_DNS_SERVER not set, relying on existing DNS to reach the domain"
     return
   fi
   log INFO "Configuring DNS for AD: $AD_DNS_SERVER"
@@ -387,11 +405,11 @@ DNS=$AD_DNS_SERVER
 Domains=~$AD_DOMAIN
 EOF
     if ! systemctl try-restart systemd-resolved; then
-      log WARNING "systemd-resolved restart failed — falling back to /etc/resolv.conf"
+      log WARNING "systemd-resolved restart failed, falling back to /etc/resolv.conf"
       _configure_dns_resolv_conf
     fi
   else
-    log INFO "systemd-resolved not active — configuring DNS via /etc/resolv.conf"
+    log INFO "systemd-resolved not active, configuring DNS via /etc/resolv.conf"
     _configure_dns_resolv_conf
   fi
 }}
@@ -428,7 +446,7 @@ set_domain_fqdn() {{
   # cloud-init), leave it alone rather than rewriting and risking breakage.
   case "$current" in
     *".$AD_DOMAIN")
-      log INFO "FQDN already within $AD_DOMAIN ($current) — leaving as-is"
+      log INFO "FQDN already within $AD_DOMAIN ($current), leaving as-is"
       return 0
       ;;
   esac
@@ -442,7 +460,7 @@ set_domain_fqdn() {{
 }}
 
 configure_krb5_realm() {{
-  # Write a minimal krb5 default_realm ONLY when none is configured anywhere — active in
+  # Write a minimal krb5 default_realm ONLY when none is configured anywhere, active in
   # /etc/krb5.conf or any conf.d snippet. RHEL/OL ship it commented out, and adcli can
   # fail with "Configuration file does not specify default realm" when the realm cannot
   # be resolved from the system config. This is idempotent insurance: if the system (or a
@@ -451,12 +469,12 @@ configure_krb5_realm() {{
   local existing
   existing=$(grep -hE '^[[:space:]]*default_realm[[:space:]]*=' /etc/krb5.conf /etc/krb5.conf.d/*.conf 2>/dev/null | head -1 || true)
   if [ -n "$existing" ]; then
-    log INFO "krb5 default_realm already configured ($existing) — leaving as-is"
+    log INFO "krb5 default_realm already configured ($existing), leaving as-is"
     return 0
   fi
   local realm
   realm=$(echo "$AD_DOMAIN" | tr '[:lower:]' '[:upper:]')
-  log INFO "No krb5 default_realm found — writing: $realm"
+  log INFO "No krb5 default_realm found, writing: $realm"
   mkdir -p /etc/krb5.conf.d
   printf '[libdefaults]\n    default_realm = %s\n[domain_realm]\n    .%s = %s\n    %s = %s\n' \
     "$realm" "$AD_DOMAIN" "$realm" "$AD_DOMAIN" "$realm" >/etc/krb5.conf.d/kasm-ad.conf
@@ -470,7 +488,7 @@ sync_time() {{
   # an opaque Kerberos clock-skew error.
   chronyc waitsync 6 0 0 5 || log WARNING "chrony did not reach a source within 30s"
   if ! chronyc makestep; then
-    log WARNING "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
+    log WARNING "chronyc makestep failed, verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
   fi
 }}
 
@@ -508,7 +526,7 @@ join_domain() {{
 enable_homedir_creation() {{
   log INFO "Configuring sssd and home directory creation"
   if [ ! -f /etc/sssd/sssd.conf ]; then
-    log ERROR "/etc/sssd/sssd.conf not found — realm join may not have completed successfully"
+    log ERROR "/etc/sssd/sssd.conf not found, realm join may not have completed successfully"
     exit 1
   fi
   if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
@@ -529,13 +547,13 @@ kasm_checkin() {{
       "https://$KASM_UPSTREAM_AUTH_ADDRESS/api/set_server_status?token=$KASM_CHECKIN_JWT"; then
     log INFO "Kasm check-in successful"
   else
-    log ERROR "Kasm check-in failed — server may not be marked ready in Kasm UI"
+    log ERROR "Kasm check-in failed, server may not be marked ready in Kasm UI"
   fi
 }}
 
 install_ad_join() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    log INFO "AD_DNS_SERVER not set — relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN"
+    log INFO "AD_DNS_SERVER not set, relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN"
   fi
   if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
     log INFO "Already joined to $AD_DOMAIN, skipping"

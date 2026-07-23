@@ -31,7 +31,7 @@ echo "${{VARIABLE}}"
 `deb.sh` / `rpm.sh` are downloaded at boot by a small bootstrap instead of being pasted in
 full into the VM Provider startup field. This keeps the startup script tiny and works the
 same way on every provider, matching the Windows scripts. It also sidesteps AWS EC2's
-16 KiB user-data limit — see [below](#aws-ec2--user-data-size-limit).
+16 KiB user-data limit, see [below](#aws-ec2--user-data-size-limit).
 
 **Paste [`bootstrap.sh`](./bootstrap.sh) into the VM Provider → "Startup Script" field.**
 It is ~2 KB and:
@@ -39,7 +39,9 @@ It is ~2 KB and:
 1. Receives Kasm's per-instance values (`{checkin_jwt}`, `{upstream_auth_address}`, …),
    substituted **only** in this field, and exports them as `KASM_*` environment variables.
 2. Detects the distro family from `/etc/os-release` and downloads `deb.sh` (Debian/Ubuntu)
-   or `rpm.sh` (Oracle Linux / RHEL and derivatives).
+   or `rpm.sh` (Oracle Linux / RHEL and derivatives). `curl` is tried first; if it's
+   missing or fails, `wget` is tried next (and vice versa if only `wget` is present).
+   The bootstrap exits with a clear error naming the URL only if both fail.
 3. Runs the downloaded script, which reads those `KASM_*` variables.
 
 Set `VERSION` in `bootstrap.sh` to the release you want to run.
@@ -66,7 +68,8 @@ leave unset keeps the script default.
 | `KASM_ENABLE_AD_JOIN` | `ENABLE_AD_JOIN` | `0` | Join Active Directory |
 | `KASM_SET_DOMAIN_FQDN` | `SET_DOMAIN_FQDN` | `1` | Set `<shortname>.<domain>` FQDN before AD join |
 | `KASM_AD_DNS_SERVER` | `AD_DNS_SERVER` | _(empty)_ | Space-separated DC / AD DNS server IPs |
-| `KASM_LOG_LEVEL` | `LOG_LEVEL` | `INFO` | Minimum level written locally and forwarded to Kasm Workspaces: `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` |
+| `KASM_LOG_LEVEL` | `LOG_LEVEL` | `INFO` | Minimum level written locally and forwarded to Kasm Workspaces: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `KASM_VERIFY_API_CERT` | `VERIFY_API_CERT` | `0` | Verify the Kasm API's TLS certificate when forwarding logs. Off by default, matches Windows' `-VerifyKasmApiCert` switch, also off unless explicitly passed |
 
 Flags are `1` (on) / `0` (off). Example, enabling AD join with explicit DNS servers (the
 `KASM_DOMAIN` / `KASM_AD_JOIN_CREDENTIAL` values are already supplied from Kasm tokens):
@@ -78,7 +81,7 @@ export KASM_AD_DNS_SERVER="192.168.1.10 192.168.1.11"
 
 ## Examples
 
-### Debian / Ubuntu — [deb.sh](./deb.sh)
+### Debian / Ubuntu, [deb.sh](./deb.sh)
 
 Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the distro at runtime from `/etc/os-release` and selects the correct KasmVNC package automatically.
 
@@ -107,7 +110,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and KasmVNC. The script detects the d
 | `AD_JOIN_PASSWORD` | Kasm `{ad_join_credential}` | One-time machine account password created by Kasm |
 | `AD_DNS_SERVER` | **Optional** | Space-separated list of Domain Controller / AD DNS server IPs for redundancy (e.g. `192.168.1.10` or `192.168.1.10 192.168.1.11`). Leave empty to use preconfigured VNET/DHCP DNS. Set this when DHCP DNS does not resolve AD SRV records. |
 
-### Oracle Linux / RHEL — [rpm.sh](./rpm.sh)
+### Oracle Linux / RHEL, [rpm.sh](./rpm.sh)
 
 Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script detects the distro at runtime from `/etc/os-release` and selects the correct KasmVNC package and EPEL installation method automatically.
 
@@ -129,7 +132,7 @@ Installs Xfce, Xrdp, Kasm Desktop Service, and optionally KasmVNC. The script de
 | `ENABLE_IPTABLES` | `1` | Open required firewall ports via firewalld (preferred) or iptables |
 | `ENABLE_AD_JOIN` | `0` | Join the VM to an Active Directory domain |
 
-**AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above. `AD_DNS_SERVER` is optional — set it to a space-separated list of DC IPs if DHCP DNS doesn't resolve AD SRV records (e.g. `192.168.1.10 192.168.1.11` for redundancy).
+**AD join variables (when `ENABLE_AD_JOIN=1`):** same as `deb.sh` above. `AD_DNS_SERVER` is optional, set it to a space-separated list of DC IPs if DHCP DNS doesn't resolve AD SRV records (e.g. `192.168.1.10 192.168.1.11` for redundancy).
 
 > **DNS configuration note:** if `NetworkManager` (`nmcli`) is present, DNS is configured via the active connection profile so it survives reconnects. On minimal installs without NetworkManager, the script falls back to writing `/etc/resolv.conf` directly. Multiple DNS servers are supported (space-separated in `AD_DNS_SERVER`) for redundancy; all are configured automatically.
 
@@ -141,9 +144,9 @@ Xfce and xrdp are not included in the default repositories for Oracle Linux or R
 
 If your organization's security policy prohibits third-party repositories, set `ENABLE_EPEL=0` and ensure the required packages are available through an internal mirror.
 
-## AWS EC2 — user data size limit
+## AWS EC2, user data size limit
 
-AWS EC2 enforces a **hard 16,384-byte (16 KiB) limit on instance user data** — it is not
+AWS EC2 enforces a **hard 16,384-byte (16 KiB) limit on instance user data**, it is not
 an adjustable quota. `deb.sh` / `rpm.sh` exceed (or sit right at) that limit once Kasm
 substitutes the template variables, so they cannot be pasted directly into an EC2
 autoscale user-data field.
@@ -155,7 +158,7 @@ stays far under the 16 KiB limit regardless of how large the scripts grow. Every
 provider Kasm autoscale supports (Azure, GCP, OCI, DigitalOcean) has a much larger limit
 and can use either approach.
 
-## AD Domain Join — Autoscale Configuration Notes
+## AD Domain Join, Autoscale Configuration Notes
 
 When using AD join with autoscale:
 
@@ -165,7 +168,7 @@ When using AD join with autoscale:
 - The **Kasm Desktop Service Installed** toggle must match whether KDS is actually running on the VM:
   - `ENABLE_KDS=1` → toggle **on**: KDS registers the server and handles checkin automatically via `register_wizard.sh`.
   - `ENABLE_KDS=0` → toggle **off**: the script signals readiness via `POST /api/set_server_status` using `{checkin_jwt}` at the end of the startup script.
-- Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, the script performs a direct HTTPS check-in to `{upstream_auth_address}` — outbound port **443** to the Kasm API must be reachable in addition to inbound **3389** for RDP.
+- Both configurations work with AD SSO RDP. With `ENABLE_KDS=1`, KDS also provides keepalive heartbeats to Kasm; with `ENABLE_KDS=0`, the script performs a direct HTTPS check-in to `{upstream_auth_address}`, outbound port **443** to the Kasm API must be reachable in addition to inbound **3389** for RDP.
 
 ### Failure behavior
 
@@ -175,7 +178,7 @@ The script runs under `set -euo pipefail`, so any failure in the AD join sequenc
 - The fallback `kasm_checkin` (only used when `ENABLE_KDS=0`) will also not run.
 - The VM will appear stuck in the autoscale UI until the **Require Server Checkin** timeout expires.
 
-When troubleshooting a server that never came up, check `/var/log/kasm_install.log` on the VM — the AD failure will be near the bottom of the log.
+When troubleshooting a server that never came up, check `/var/log/kasm_install.log` on the VM, the AD failure will be near the bottom of the log.
 
 ### Ports to expose on the AD server
 
@@ -185,18 +188,18 @@ The Kasm VMs need **outbound** access to the following ports on the Domain Contr
 |----------------|-----------|-----------------------------------------------------------------|
 | 53             | TCP + UDP | DNS (SRV record lookups for `_ldap._tcp.<domain>`, etc.)        |
 | 88             | TCP + UDP | Kerberos authentication                                         |
-| 123            | UDP       | NTP — required for time sync before realm join (`<5 min` skew)  |
-| 389            | TCP       | LDAP — realm join uses plain LDAP, not LDAPS (636)              |
-| 445            | TCP       | SMB — machine account creation and SPN registration             |
+| 123            | UDP       | NTP, required for time sync before realm join (`<5 min` skew)  |
+| 389            | TCP       | LDAP, realm join uses plain LDAP, not LDAPS (636)              |
+| 445            | TCP       | SMB, machine account creation and SPN registration             |
 | 464            | TCP + UDP | Kerberos password set / change (kpasswd)                        |
 | 3268           | TCP       | Global Catalog (multi-domain forests / cross-domain lookups)    |
-| 49152 – 65535  | TCP       | RPC dynamic port range — used by `adcli` for several join steps |
+| 49152 – 65535  | TCP       | RPC dynamic port range, used by `adcli` for several join steps |
 
 Notes:
 - The RPC dynamic range is wide by default on Windows Server 2008+. If your firewall policy can't open the full range, you can restrict the DC's RPC range via the registry (`Internet Communication Management` → `RPC` → `Internet`); narrow it to a few hundred ports and open just that band.
-- NTP (123/UDP) can point at your own time source instead of the DC if you have one — the script syncs against whatever chrony's configured pool is, then `realm join` only cares that the resulting clock skew is < 5 minutes.
+- NTP (123/UDP) can point at your own time source instead of the DC if you have one, the script syncs against whatever chrony's configured pool is, then `realm join` only cares that the resulting clock skew is < 5 minutes.
 
-### Security note — one-time password visibility
+### Security note, one-time password visibility
 
 The Kasm-supplied OTP is passed to `realm join` as a command-line argument (`--one-time-password=…`), which means it is briefly visible in `/proc/<pid>/cmdline` (i.e. via `ps`) for the duration of the join. Since this is a single-use credential, it executes on a fresh VM with no other interactive users, and the join completes in seconds, the practical exposure is minimal. If your threat model requires hiding it entirely, the script would need to be rewritten to call `adcli` with `--stdin-password` and configure sssd manually (bypassing `realmd`).
 
@@ -215,9 +218,11 @@ If you manage firewall rules outside the script, set `ENABLE_IPTABLES=0`.
 
 All installation output is captured at `/var/log/kasm_install.log`. The log file is created with mode `0600` before any output is written, so credentials substituted into the script by Kasm are not world-readable.
 
-Log messages are tagged with one of five levels — `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` — via the internal `log()` helper. `KASM_LOG_LEVEL` (default `INFO`) sets the minimum level that is written locally and forwarded to Kasm Workspaces; messages below that level are dropped entirely.
+Log messages are tagged with one of five levels, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, via the internal `log()` helper. `KASM_LOG_LEVEL` (default `INFO`) sets the minimum level that is written locally and forwarded to Kasm Workspaces; messages below that level are dropped entirely.
 
-Each log line is also forwarded to Kasm Workspaces so autoscale failures are visible under Diagnostics > Logging and available to observability tools like Grafana or Splunk, even if the VM is destroyed before the local log can be reviewed. Forwarding is asynchronous and fire-and-forget — it never delays the install — and is skipped automatically if `curl` isn't available yet or the Kasm token/host haven't been provided. The `host` value reported is `{server_hostname}` (the computer object name Kasm created for this server) when Kasm supplies it, otherwise the VM's own hostname — matching the Windows startup script's `-ServerName` behavior.
+Each log line is also forwarded to Kasm Workspaces so autoscale failures are visible under Diagnostics > Logging and available to observability tools like Grafana or Splunk, even if the VM is destroyed before the local log can be reviewed. Forwarding is asynchronous and fire-and-forget, it never delays the install, and is skipped automatically if `curl` isn't available yet or the Kasm token/host haven't been provided. The `host` value reported is `{server_hostname}` (the computer object name Kasm created for this server) when Kasm supplies it, otherwise the VM's own hostname, matching the Windows startup script's `-ServerName` behavior.
+
+By default the log-forwarding request does not verify the Kasm API's TLS certificate (`curl -k`), matching the Windows startup script's `-VerifyKasmApiCert` switch, which is also off unless explicitly passed. Set `KASM_VERIFY_API_CERT=1` to require a valid certificate instead.
 
 Logs are POSTed to `/api/component_log` (Kasm 1.18+). If that returns a 404, the script falls back once to `/api/kasm_session_log` for Kasm 1.17 and earlier, reusing the same payload shape.
 
