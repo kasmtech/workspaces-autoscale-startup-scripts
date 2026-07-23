@@ -23,7 +23,7 @@ export KASM_AD_JOIN_CREDENTIAL="{ad_join_credential}"
 # export KASM_ENABLE_KDS=1
 # export KASM_ENABLE_IPTABLES=1
 # export KASM_ENABLE_EPEL=1                          # rpm.sh (Oracle Linux / RHEL) only
-# export KASM_ENABLE_AD_JOIN=1                       # join Active Directory
+# export KASM_ENABLE_AD_JOIN=0                       # join Active Directory
 # export KASM_SET_DOMAIN_FQDN=1                      # set <shortname>.<domain> FQDN before AD join
 # export KASM_AD_DNS_SERVER="10.0.0.5 10.0.0.6"      # space-separated DC / AD DNS server IPs
 
@@ -45,9 +45,9 @@ ensure_downloader() {{
   local n
   for n in $(seq 1 10); do
     if [ "$SCRIPT" = "deb.sh" ]; then
-      if apt-get update && apt-get install -y curl; then return 0; fi
+      if apt-get -o DPkg::Lock::Timeout=600 update && apt-get -o DPkg::Lock::Timeout=600 install -y curl; then return 0; fi
     else
-      if dnf install -y curl || yum install -y curl; then return 0; fi
+      if dnf --setopt=lock_timeout=600 --setopt=retries=10 install -y curl || yum install -y curl; then return 0; fi
     fi
     echo "[WARN] installing curl failed (attempt $n/10); retrying in 10s..." >&2
     sleep 10
