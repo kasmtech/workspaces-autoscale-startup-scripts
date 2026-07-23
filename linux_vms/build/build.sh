@@ -7,7 +7,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"   # linux_vms/
 DIST_DIR="$PROJECT_ROOT/dist"
 
 # Per-instance Kasm tokens supplied by the bootstrap via KASM_* env vars instead.
-TOKENS=(domain ad_join_credential connection_password connection_username upstream_auth_address checkin_jwt)
+TOKENS=(domain ad_join_credential connection_password connection_username upstream_auth_address checkin_jwt server_hostname)
 
 render() {
   local src="$1" dst="$2" t

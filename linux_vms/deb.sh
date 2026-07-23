@@ -19,6 +19,10 @@ KASM_UPSTREAM_AUTH_ADDRESS="${{KASM_UPSTREAM_AUTH_ADDRESS:-{upstream_auth_addres
 KASM_CHECKIN_JWT="${{KASM_CHECKIN_JWT:-{checkin_jwt}}}"
 KASM_CONNECTION_USERNAME="${{KASM_CONNECTION_USERNAME:-{connection_username}}}"
 KASM_CONNECTION_PASSWORD="${{KASM_CONNECTION_PASSWORD:-{connection_password}}}"
+# The computer object name Kasm created for this server. Not set on every hypervisor
+# (e.g. Proxmox, VMware may not run CloudBase-Init-equivalent provisioning), so it can
+# be empty — matches Windows' -ServerName / {server_hostname} behavior exactly.
+KASM_SERVER_HOSTNAME="${{KASM_SERVER_HOSTNAME:-{server_hostname}}}"
 
 # AD join (only used when ENABLE_AD_JOIN=1)
 AD_DOMAIN="${{KASM_DOMAIN:-{domain}}}"
@@ -35,6 +39,103 @@ AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="19
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
 SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
+# Logging: DEBUG < INFO < WARN < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
+# level that is written to the local log and forwarded to Kasm Workspaces.
+LOG_LEVEL="${{KASM_LOG_LEVEL:-INFO}}"
+LOG_LEVEL="$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')"
+
+_log_level_num() {{
+  case "$1" in
+    DEBUG)    echo 0 ;;
+    INFO)     echo 1 ;;
+    WARN)     echo 2 ;;
+    ERROR)    echo 3 ;;
+    CRITICAL) echo 4 ;;
+    *)        echo 1 ;;
+  esac
+}}
+
+_json_escape() {{
+  local s="$1"
+  s="${{s//\\/\\\\}}"
+  s="${{s//\"/\\\"}}"
+  printf '%s' "$s"
+}}
+
+# Forward one log line to Kasm Workspaces (POST /api/component_log). Fire-and-forget:
+# runs in the background so a slow/unreachable API never delays the install. Falls
+# back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier — that
+# endpoint's exact request schema is unconfirmed, so this reuses the component_log
+# payload shape as a best-effort fallback.
+send_kasm_log() {{
+  local level="$1" message="$2"
+  command -v curl >/dev/null 2>&1 || return 0
+  [ -n "${{KASM_CHECKIN_JWT:-}}" ] && [ -n "${{KASM_UPSTREAM_AUTH_ADDRESS:-}}" ] || return 0
+
+  local host msg_json body
+  if [ -n "$KASM_SERVER_HOSTNAME" ]; then
+    host="$KASM_SERVER_HOSTNAME"
+  else
+    host=$(hostname 2>/dev/null || echo unknown)
+  fi
+  msg_json=$(_json_escape "$message")
+  body=$(printf '{{"token":"%s","logs":[{{"host":"%s","application":"startup-script","levelname":"%s","message":"%s","ingest_date":"%s"}}]}}' \
+    "$KASM_CHECKIN_JWT" "$host" "$level" "$msg_json" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+
+  (
+    set +e
+    url="https://$KASM_UPSTREAM_AUTH_ADDRESS/api/component_log"
+    fell_back=0
+    attempt=1
+    while [ "$attempt" -le 3 ]; do
+      code=$(curl -k -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
+        -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null)
+
+      case "$code" in
+        2??)
+          exit 0
+          ;;
+        404)
+          if [ "$fell_back" -eq 0 ]; then
+            url="https://$KASM_UPSTREAM_AUTH_ADDRESS/api/kasm_session_log"
+            fell_back=1
+            continue
+          fi
+          ;;
+      esac
+
+      attempt=$((attempt + 1))
+      if [ "$attempt" -le 3 ]; then
+        sleep 2
+      else
+        printf '%s\tFailed to send log to Kasm Workspaces: HTTP %s\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${{code:-unknown}}" >>"$LOG_FILE" 2>/dev/null
+      fi
+    done
+  ) &
+}}
+
+# Write a level-tagged, timestamped line locally and forward it to Kasm Workspaces.
+# Messages below $LOG_LEVEL are dropped entirely (not written, not forwarded).
+log() {{
+  local level="$1"; shift
+  local message="$*"
+  local levelnum threshnum ts
+
+  levelnum=$(_log_level_num "$level")
+  threshnum=$(_log_level_num "$LOG_LEVEL")
+  [ "$levelnum" -ge "$threshnum" ] || return 0
+
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if [ "$level" = "WARN" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
+    printf '%s [%s] %s\n' "$ts" "$level" "$message" >&2
+  else
+    printf '%s [%s] %s\n' "$ts" "$level" "$message"
+  fi
+
+  send_kasm_log "$level" "$message"
+}}
+
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
 touch "$LOG_FILE"
@@ -46,7 +147,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 validate_flag() {{
   case "$2" in
     0|1) ;;
-    *) echo "[ERROR] $1 must be 0 or 1 (got: '$2')" >&2; exit 1 ;;
+    *) log ERROR "$1 must be 0 or 1 (got: '$2')"; exit 1 ;;
   esac
 }}
 validate_flag KASM_ENABLE_KASMVNC "$ENABLE_KASMVNC"
@@ -60,10 +161,10 @@ validate_flag KASM_SET_DOMAIN_FQDN "$SET_DOMAIN_FQDN"
 . /etc/os-release
 OS_ID="$ID"
 OS_CODENAME="${{VERSION_CODENAME:-}}"
-echo "[INFO] Detected OS: $OS_ID $OS_CODENAME"
+log INFO "Detected OS: $OS_ID $OS_CODENAME"
 
 configure_iptables() {{
-  echo "[INFO] Adding firewall rules at $(date)"
+  log INFO "Adding firewall rules"
 
   # Use ufw only when it is actively enforcing; otherwise manage iptables directly.
   if systemctl is-active --quiet ufw && timeout 30 ufw status 2>/dev/null | grep -q '^Status: active$'; then
@@ -74,12 +175,12 @@ configure_iptables() {{
         break
       fi
       # Wait for ufw rather than restarting it, which could disrupt its startup.
-      echo "[WARN] ufw unresponsive (attempt $i/5); waiting for it to come up..."
+      log WARN "ufw unresponsive (attempt $i/5); waiting for it to come up..."
       sleep 30
     done
     if [ "$UFW_READY" -eq 0 ]; then
       # Fail rather than ship an unreachable instance with no port rules applied.
-      echo "[ERROR] ufw did not become ready after 5 attempts" >&2
+      log ERROR "ufw did not become ready after 5 attempts"
       exit 1
     fi
     if [ "$ENABLE_XRDP"    -eq 1 ]; then timeout 30 ufw allow 3389/tcp || true; fi
@@ -114,10 +215,10 @@ apt() {{
     if command apt-get -o DPkg::Lock::Timeout=600 "$@"; then
       return 0
     fi
-    echo "[WARN] apt-get failed (attempt $n/10); retrying in 30s..." >&2
+    log WARN "apt-get failed (attempt $n/10); retrying in 30s..."
     sleep 30
   done
-  echo "[ERROR] apt-get failed after 10 attempts: $*" >&2
+  log ERROR "apt-get failed after 10 attempts: $*"
   return 1
 }}
 
@@ -136,7 +237,7 @@ install_kasmvnc() {{
     bullseye) KASMVNC_DISTRO="bullseye" ;; # Debian 11
     bookworm) KASMVNC_DISTRO="bookworm" ;; # Debian 12
     *)
-      echo "[ERROR] KasmVNC: unsupported distro $OS_ID $OS_CODENAME" >&2
+      log ERROR "KasmVNC: unsupported distro $OS_ID $OS_CODENAME"
       return 1
       ;;
   esac
@@ -232,7 +333,7 @@ install_kds() {{
   case "$ARCH" in
     amd64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.deb" ;;
     arm64) KDS_DEB_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.deb" ;;
-    *) echo "[ERROR] Unsupported architecture: $ARCH" >&2; exit 1 ;;
+    *) log ERROR "Unsupported architecture: $ARCH"; exit 1 ;;
   esac
 
   cd /tmp
@@ -254,7 +355,7 @@ install_kds() {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN" \
-  || {{ echo "[ERROR] KDS registration failed or timed out against $API_HOST:$API_PORT" >&2; exit 1; }}
+  || {{ log ERROR "KDS registration failed or timed out against $API_HOST:$API_PORT"; exit 1; }}
 
   sleep 2
 
@@ -263,7 +364,7 @@ install_kds() {{
 }}
 
 install_ad_dependencies() {{
-  echo "[INFO] Installing AD dependencies"
+  log INFO "Installing AD dependencies"
   apt install -y \
     realmd sssd sssd-tools adcli \
     krb5-user libpam-modules \
@@ -273,10 +374,10 @@ install_ad_dependencies() {{
 
 configure_dns_for_ad() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
+    log INFO "AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
     return
   fi
-  echo "[INFO] Configuring DNS for AD: $AD_DNS_SERVER"
+  log INFO "Configuring DNS for AD: $AD_DNS_SERVER"
   if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1 && \
      systemctl is-active --quiet systemd-resolved; then
     mkdir -p /etc/systemd/resolved.conf.d
@@ -286,11 +387,11 @@ DNS=$AD_DNS_SERVER
 Domains=~$AD_DOMAIN
 EOF
     if ! systemctl try-restart systemd-resolved; then
-      echo "[WARN] systemd-resolved restart failed — falling back to /etc/resolv.conf" >&2
+      log WARN "systemd-resolved restart failed — falling back to /etc/resolv.conf"
       _configure_dns_resolv_conf
     fi
   else
-    echo "[INFO] systemd-resolved not active — configuring DNS via /etc/resolv.conf"
+    log INFO "systemd-resolved not active — configuring DNS via /etc/resolv.conf"
     _configure_dns_resolv_conf
   fi
 }}
@@ -304,7 +405,7 @@ _configure_dns_resolv_conf() {{
   grep -v "^nameserver" /etc/resolv.conf >>"$tmp" || true
   if [ -L /etc/resolv.conf ]; then
     target=$(readlink -f /etc/resolv.conf)
-    echo "[INFO] /etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
+    log INFO "/etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
     cp "$tmp" "$target"
     rm -f "$tmp"
   else
@@ -327,11 +428,11 @@ set_domain_fqdn() {{
   # cloud-init), leave it alone rather than rewriting and risking breakage.
   case "$current" in
     *".$AD_DOMAIN")
-      echo "[INFO] FQDN already within $AD_DOMAIN ($current) — leaving as-is"
+      log INFO "FQDN already within $AD_DOMAIN ($current) — leaving as-is"
       return 0
       ;;
   esac
-  echo "[INFO] Setting FQDN to $fqdn for AD join (was: $current)"
+  log INFO "Setting FQDN to $fqdn for AD join (was: $current)"
   hostnamectl set-hostname "$fqdn"
   # Map the FQDN locally so hostname -f and adcli resolve it even when the forward
   # A record has not propagated yet in AD DNS.
@@ -350,31 +451,31 @@ configure_krb5_realm() {{
   local existing
   existing=$(grep -hE '^[[:space:]]*default_realm[[:space:]]*=' /etc/krb5.conf /etc/krb5.conf.d/*.conf 2>/dev/null | head -1 || true)
   if [ -n "$existing" ]; then
-    echo "[INFO] krb5 default_realm already configured ($existing) — leaving as-is"
+    log INFO "krb5 default_realm already configured ($existing) — leaving as-is"
     return 0
   fi
   local realm
   realm=$(echo "$AD_DOMAIN" | tr '[:lower:]' '[:upper:]')
-  echo "[INFO] No krb5 default_realm found — writing: $realm"
+  log INFO "No krb5 default_realm found — writing: $realm"
   mkdir -p /etc/krb5.conf.d
   printf '[libdefaults]\n    default_realm = %s\n[domain_realm]\n    .%s = %s\n    %s = %s\n' \
     "$realm" "$AD_DOMAIN" "$realm" "$AD_DOMAIN" "$realm" >/etc/krb5.conf.d/kasm-ad.conf
 }}
 
 sync_time() {{
-  echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
+  log INFO "Syncing system clock (Kerberos requires <5 min skew)"
   systemctl enable --now chrony
   # Wait up to ~30s for chrony to contact a source before stepping. Without this,
   # makestep can fire before any NTP sample is in and realm join later fails with
   # an opaque Kerberos clock-skew error.
-  chronyc waitsync 6 0 0 5 || echo "[WARN] chrony did not reach a source within 30s" >&2
+  chronyc waitsync 6 0 0 5 || log WARN "chrony did not reach a source within 30s"
   if ! chronyc makestep; then
-    echo "[WARN] chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join" >&2
+    log WARN "chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
   fi
 }}
 
 test_domain_resolution() {{
-  echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
+  log INFO "Testing DNS resolution for $AD_DOMAIN"
   # Pin dig to AD_DNS_SERVER when provided so the test bypasses any stale system
   # resolver state from before configure_dns_for_ad ran. Use only the first server.
   local dig_server=""
@@ -383,31 +484,31 @@ test_domain_resolution() {{
   fi
   local srv_query="_ldap._tcp.$AD_DOMAIN"
   if ! dig +short +time=5 +tries=2 $dig_server "$srv_query" SRV | grep -q '.'; then
-    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN via ${{AD_DNS_SERVER:-system resolver}}" >&2
-    echo "[ERROR] timed out => 53 blocked/unreachable; SERVFAIL/REFUSED => wrong server/zone; NXDOMAIN => records missing" >&2
+    log ERROR "LDAP SRV records not found for $AD_DOMAIN via ${{AD_DNS_SERVER:-system resolver}}"
+    log ERROR "timed out => 53 blocked/unreachable; SERVFAIL/REFUSED => wrong server/zone; NXDOMAIN => records missing"
     dig +time=5 +tries=2 $dig_server "$srv_query" SRV 2>&1 | sed 's/^/[dig] /' >&2
     exit 1
   fi
   realm discover "$AD_DOMAIN" >/dev/null || {{
-    echo "[ERROR] realm discovery failed for $AD_DOMAIN" >&2
+    log ERROR "realm discovery failed for $AD_DOMAIN"
     exit 1
   }}
-  echo "[INFO] Domain resolution successful"
+  log INFO "Domain resolution successful"
 }}
 
 join_domain() {{
-  echo "[INFO] Joining domain $AD_DOMAIN via one-time password"
+  log INFO "Joining domain $AD_DOMAIN via one-time password"
   realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
-    echo "[ERROR] Domain join failed"
+    log ERROR "Domain join failed"
     exit 1
   }}
-  echo "[INFO] Domain join successful"
+  log INFO "Domain join successful"
 }}
 
 enable_homedir_creation() {{
-  echo "[INFO] Configuring sssd and home directory creation"
+  log INFO "Configuring sssd and home directory creation"
   if [ ! -f /etc/sssd/sssd.conf ]; then
-    echo "[ERROR] /etc/sssd/sssd.conf not found — realm join may not have completed successfully" >&2
+    log ERROR "/etc/sssd/sssd.conf not found — realm join may not have completed successfully"
     exit 1
   fi
   if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
@@ -421,23 +522,23 @@ enable_homedir_creation() {{
 }}
 
 kasm_checkin() {{
-  echo "[INFO] Signaling Kasm server ready"
+  log INFO "Signaling Kasm server ready"
   if curl -k -fsS -X POST \
       -H "Content-Type: application/json" \
       --data '{{"status":"running","status_message":"Startup complete","status_progress":"100"}}' \
       "https://$KASM_UPSTREAM_AUTH_ADDRESS/api/set_server_status?token=$KASM_CHECKIN_JWT"; then
-    echo "[INFO] Kasm check-in successful"
+    log INFO "Kasm check-in successful"
   else
-    echo "[ERROR] Kasm check-in failed — server may not be marked ready in Kasm UI" >&2
+    log ERROR "Kasm check-in failed — server may not be marked ready in Kasm UI"
   fi
 }}
 
 install_ad_join() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    echo "[INFO] AD_DNS_SERVER not set — relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN" >&2
+    log INFO "AD_DNS_SERVER not set — relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN"
   fi
   if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
-    echo "[INFO] Already joined to $AD_DOMAIN, skipping"
+    log INFO "Already joined to $AD_DOMAIN, skipping"
     return
   fi
   install_ad_dependencies
@@ -448,7 +549,7 @@ install_ad_join() {{
   test_domain_resolution
   join_domain
   enable_homedir_creation
-  echo "[INFO] AD join complete"
+  log INFO "AD join complete"
 }}
 
 apt_wait

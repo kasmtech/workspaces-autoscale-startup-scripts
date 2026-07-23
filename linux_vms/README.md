@@ -13,6 +13,7 @@ Kasm replaces variables in the script that are wrapped in curly brackets, such a
 | domain              | If the auto-scale configuration is set to join the VM to an Active Directory domain, this variable will contain the name of the domain.                                                                                                                                                                              |
 | upstream_auth_address      | The resolvable hostname, IP, or FQDN of the KASM API server. The token `{upstream_auth_address}` will be replaced with the value of "Zone" > "Upstream Auth Address" from the autoscale configuration's zone. |
 | checkin_jwt        | The registration token (JWT) created by Kasm for the newly created server. The token `{checkin_jwt}` will be replaced with a Kasm-generated registration token that is valid for 4 hours. |                                                                                                                                                                
+| server_hostname     | The name of the computer object Kasm created for this server. The token `{server_hostname}` will be replaced with that name. Used as the `host` value reported in logs forwarded to Kasm Workspaces; falls back to the VM's own hostname when this is empty (e.g. on hypervisors that don't set the VM hostname to match at provision time). |
 
 **NOTE: Linux AD join uses one-time password, not username**
 On Linux, Kasm pre-creates the machine account in AD and provides a one-time join password via `{ad_join_credential}`. The scripts use `realm join --one-time-password` with this value. No AD username is required.
@@ -65,6 +66,7 @@ leave unset keeps the script default.
 | `KASM_ENABLE_AD_JOIN` | `ENABLE_AD_JOIN` | `0` | Join Active Directory |
 | `KASM_SET_DOMAIN_FQDN` | `SET_DOMAIN_FQDN` | `1` | Set `<shortname>.<domain>` FQDN before AD join |
 | `KASM_AD_DNS_SERVER` | `AD_DNS_SERVER` | _(empty)_ | Space-separated DC / AD DNS server IPs |
+| `KASM_LOG_LEVEL` | `LOG_LEVEL` | `INFO` | Minimum level written locally and forwarded to Kasm Workspaces: `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` |
 
 Flags are `1` (on) / `0` (off). Example, enabling AD join with explicit DNS servers (the
 `KASM_DOMAIN` / `KASM_AD_JOIN_CREDENTIAL` values are already supplied from Kasm tokens):
@@ -212,5 +214,11 @@ If you manage firewall rules outside the script, set `ENABLE_IPTABLES=0`.
 ## Logging
 
 All installation output is captured at `/var/log/kasm_install.log`. The log file is created with mode `0600` before any output is written, so credentials substituted into the script by Kasm are not world-readable.
+
+Log messages are tagged with one of five levels — `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` — via the internal `log()` helper. `KASM_LOG_LEVEL` (default `INFO`) sets the minimum level that is written locally and forwarded to Kasm Workspaces; messages below that level are dropped entirely.
+
+Each log line is also forwarded to Kasm Workspaces so autoscale failures are visible under Diagnostics > Logging and available to observability tools like Grafana or Splunk, even if the VM is destroyed before the local log can be reviewed. Forwarding is asynchronous and fire-and-forget — it never delays the install — and is skipped automatically if `curl` isn't available yet or the Kasm token/host haven't been provided. The `host` value reported is `{server_hostname}` (the computer object name Kasm created for this server) when Kasm supplies it, otherwise the VM's own hostname — matching the Windows startup script's `-ServerName` behavior.
+
+Logs are POSTed to `/api/component_log` (Kasm 1.18+). If that returns a 404, the script falls back once to `/api/kasm_session_log` for Kasm 1.17 and earlier, reusing the same payload shape.
 
 Additional KasmVNC installers for other distros can be found on the public [KasmVNC github repository](https://github.com/kasmtech/KasmVNC/releases)

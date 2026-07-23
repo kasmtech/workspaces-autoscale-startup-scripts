@@ -14,6 +14,7 @@ export KASM_CONNECTION_USERNAME="{connection_username}"
 export KASM_CONNECTION_PASSWORD="{connection_password}"
 export KASM_DOMAIN="{domain}"
 export KASM_AD_JOIN_CREDENTIAL="{ad_join_credential}"
+export KASM_SERVER_HOSTNAME="{server_hostname}"
 
 # --- Optional feature overrides ----------------------------------------------
 # Uncomment and set any of these to override the defaults baked into deb.sh / rpm.sh.
@@ -26,6 +27,7 @@ export KASM_AD_JOIN_CREDENTIAL="{ad_join_credential}"
 # export KASM_ENABLE_AD_JOIN=0                       # join Active Directory
 # export KASM_SET_DOMAIN_FQDN=1                      # set <shortname>.<domain> FQDN before AD join
 # export KASM_AD_DNS_SERVER="10.0.0.5 10.0.0.6"      # space-separated DC / AD DNS server IPs
+# export KASM_LOG_LEVEL="INFO"                       # DEBUG | INFO | WARN | ERROR | CRITICAL
 
 # Select the installer for this distro family.
 . /etc/os-release
