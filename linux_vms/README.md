@@ -29,7 +29,8 @@ echo "${{VARIABLE}}"
 
 `deb.sh` / `rpm.sh` are downloaded at boot by a small bootstrap instead of being pasted in
 full into the VM Provider startup field. This keeps the startup script tiny and works the
-same way on every provider, matching the Windows scripts.
+same way on every provider, matching the Windows scripts. It also sidesteps AWS EC2's
+16 KiB user-data limit — see [below](#aws-ec2--user-data-size-limit).
 
 **Paste [`bootstrap.sh`](./bootstrap.sh) into the VM Provider → "Startup Script" field.**
 It is ~2 KB and:
@@ -141,13 +142,16 @@ If your organization's security policy prohibits third-party repositories, set `
 ## AWS EC2 — user data size limit
 
 AWS EC2 enforces a **hard 16,384-byte (16 KiB) limit on instance user data** — it is not
-an adjustable quota. The scripts above exceed (or sit right at) that limit once Kasm
+an adjustable quota. `deb.sh` / `rpm.sh` exceed (or sit right at) that limit once Kasm
 substitutes the template variables, so they cannot be pasted directly into an EC2
-autoscale user-data field. Stripped-down copies that fit are in
-[`aws_scripts/`](./aws_scripts/) — see that folder's [README](./aws_scripts/README.md)
-for details and the more robust alternatives (gzip / host + download). Every other
+autoscale user-data field.
+
+Use the **hosted scripts + bootstrap** deployment described [above](#deployment-hosted-scripts--bootstrap):
+paste [`bootstrap.sh`](./bootstrap.sh) (~2 KB) into the user-data field instead. It
+downloads the full `deb.sh` / `rpm.sh` from S3 at boot, so the user-data field itself
+stays far under the 16 KiB limit regardless of how large the scripts grow. Every other
 provider Kasm autoscale supports (Azure, GCP, OCI, DigitalOcean) has a much larger limit
-and should keep using the canonical scripts above.
+and can use either approach.
 
 ## AD Domain Join — Autoscale Configuration Notes
 

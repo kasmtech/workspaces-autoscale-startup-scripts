@@ -35,6 +35,13 @@ AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="19
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
 SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
+LOG_FILE="/var/log/kasm_install.log"
+mkdir -p /var/log
+touch "$LOG_FILE"
+chmod 0600 "$LOG_FILE"
+echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 # Flags must be 0 or 1 — anything else (e.g. a typo'd override) fails fast here.
 validate_flag() {{
   case "$2" in
@@ -48,13 +55,6 @@ validate_flag KASM_ENABLE_KDS "$ENABLE_KDS"
 validate_flag KASM_ENABLE_IPTABLES "$ENABLE_IPTABLES"
 validate_flag KASM_ENABLE_AD_JOIN "$ENABLE_AD_JOIN"
 validate_flag KASM_SET_DOMAIN_FQDN "$SET_DOMAIN_FQDN"
-
-LOG_FILE="/var/log/kasm_install.log"
-mkdir -p /var/log
-touch "$LOG_FILE"
-chmod 0600 "$LOG_FILE"
-echo "===== KASM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
-exec > >(tee -a "$LOG_FILE") 2>&1
 
 # Detect OS — used by install_kasmvnc to select the right package
 . /etc/os-release
