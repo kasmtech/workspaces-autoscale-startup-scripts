@@ -1,4 +1,7 @@
 #ps1_sysnative
+# TEMPLATE NOTE: This file uses {{ key.path }} tokens replaced by build/template.py at build time.
+#   {{ fsLogix.installer }}  : NOT a typo, NOT a PS variable -- replaced with value from versions.yaml
+#   Do NOT convert {{ }} to $variable or remove the braces.
 
 param(
     [Parameter(Mandatory=$true)]

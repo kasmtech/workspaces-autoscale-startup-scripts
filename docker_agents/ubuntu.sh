@@ -1,4 +1,5 @@
 #!/bin/bash
+# TEMPLATE NOTE: Python str.format() template. All brace patterns are intentional, do not alter.
 set -ex
 
 # Note: Templated items (e.g '<bracket>foo<bracket>') will be replaced by Kasm when provisioning the system
