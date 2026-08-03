@@ -74,9 +74,27 @@ _json_escape() {{
 # back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier, that
 # endpoint's exact request schema is unconfirmed, so this reuses the component_log
 # payload shape as a best-effort fallback.
+# POST $2 to $1 via curl if available, else wget (bootstrap.sh only guarantees one
+# of the two is installed before rpm.sh's own "dnf install -y wget curl" runs).
+# Echoes the resulting HTTP status code so send_kasm_log's retry/fallback loop
+# behaves the same regardless of which downloader is present.
+_http_post_status() {{
+  local url="$1" body="$2" cert_opt="$3"
+  if command -v curl >/dev/null 2>&1; then
+    curl $cert_opt -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
+      -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null
+    return
+  fi
+  local wget_cert_opt=""
+  [ "$cert_opt" = "-k" ] && wget_cert_opt="--no-check-certificate"
+  wget $wget_cert_opt -q -O /dev/null --server-response --timeout=10 \
+    --header="Content-Type: application/json" --post-data="$body" "$url" 2>&1 \
+    | grep -oE 'HTTP/[0-9.]+ [0-9]+' | tail -1 | cut -d' ' -f2
+}}
+
 send_kasm_log() {{
   local level="$1" message="$2"
-  command -v curl >/dev/null 2>&1 || return 0
+  command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || return 0
   [ -n "${{KASM_CHECKIN_JWT:-}}" ] && [ -n "${{KASM_UPSTREAM_AUTH_ADDRESS:-}}" ] || return 0
 
   local host msg_json body cert_opt
@@ -105,8 +123,7 @@ send_kasm_log() {{
     fell_back=0
     attempt=1
     while [ "$attempt" -le 3 ]; do
-      code=$(curl $cert_opt -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
-        -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null)
+      code=$(_http_post_status "$url" "$body" "$cert_opt")
 
       case "$code" in
         2??)
