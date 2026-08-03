@@ -40,7 +40,7 @@ It is ~2 KB and:
    substituted **only** in this field, and exports them as `KASM_*` environment variables.
 2. Detects the distro family from `/etc/os-release` and downloads `deb.sh` (Debian/Ubuntu)
    or `rpm.sh` (Oracle Linux / RHEL and derivatives). `curl` is tried first; if it's
-   missing or fails, `wget` is tried next (and vice versa if only `wget` is present).
+   missing or fails, `wget` is tried next.
    The bootstrap exits with a clear error naming the URL only if both fail.
 3. Runs the downloaded script, which reads those `KASM_*` variables.
 
@@ -197,7 +197,7 @@ The Kasm VMs need **outbound** access to the following ports on the Domain Contr
 
 Notes:
 - The RPC dynamic range is wide by default on Windows Server 2008+. If your firewall policy can't open the full range, you can restrict the DC's RPC range via the registry (`Internet Communication Management` → `RPC` → `Internet`); narrow it to a few hundred ports and open just that band.
-- NTP (123/UDP) can point at your own time source instead of the DC if you have one, the script syncs against whatever chrony's configured pool is, then `realm join` only cares that the resulting clock skew is < 5 minutes.
+- NTP (123/UDP) can point at your own time source instead of the DC if you have one. The script syncs against whatever chrony's configured pool is, then `realm join` only cares that the resulting clock skew is < 5 minutes.
 
 ### Security note, one-time password visibility
 

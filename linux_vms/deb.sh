@@ -71,9 +71,8 @@ _json_escape() {{
 
 # Forward one log line to Kasm Workspaces (POST /api/component_log). Fire-and-forget:
 # runs in the background so a slow/unreachable API never delays the install. Falls
-# back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier, that
-# endpoint's exact request schema is unconfirmed, so this reuses the component_log
-# payload shape as a best-effort fallback.
+# back to /api/kasm_session_log once on a 404. For Kasm 1.17 and earlier, this
+# reuses the component_log payload shape as a best-effort fallback.
 send_kasm_log() {{
   local level="$1" message="$2"
   command -v curl >/dev/null 2>&1 || return 0
