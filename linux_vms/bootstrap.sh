@@ -14,6 +14,7 @@ export KASM_CONNECTION_USERNAME="{connection_username}"
 export KASM_CONNECTION_PASSWORD="{connection_password}"
 export KASM_DOMAIN="{domain}"
 export KASM_AD_JOIN_CREDENTIAL="{ad_join_credential}"
+export KASM_SERVER_HOSTNAME="{server_hostname}"
 
 # --- Optional feature overrides ----------------------------------------------
 # Uncomment and set any of these to override the defaults baked into deb.sh / rpm.sh.
@@ -26,6 +27,8 @@ export KASM_AD_JOIN_CREDENTIAL="{ad_join_credential}"
 # export KASM_ENABLE_AD_JOIN=0                       # join Active Directory
 # export KASM_SET_DOMAIN_FQDN=1                      # set <shortname>.<domain> FQDN before AD join
 # export KASM_AD_DNS_SERVER="10.0.0.5 10.0.0.6"      # space-separated DC / AD DNS server IPs
+# export KASM_LOG_LEVEL="INFO"                       # DEBUG | INFO | WARNING | ERROR | CRITICAL
+# export KASM_VERIFY_API_CERT=1                      # verify the Kasm API's TLS cert when forwarding logs (default 0, skip verification)
 
 # Select the installer for this distro family.
 . /etc/os-release
@@ -59,9 +62,23 @@ ensure_downloader
 
 cd /tmp
 echo "[INFO] Downloading $BASE_URL/$SCRIPT"
+downloaded=0
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL --retry 5 --retry-connrefused --retry-delay 5 --max-time 60 "$BASE_URL/$SCRIPT" -o "$SCRIPT"
-else
-  wget -q --tries=5 --waitretry=5 --timeout=60 -O "$SCRIPT" "$BASE_URL/$SCRIPT"
+  if curl -fsSL --retry 5 --retry-connrefused --retry-delay 5 --max-time 60 "$BASE_URL/$SCRIPT" -o "$SCRIPT"; then
+    downloaded=1
+  else
+    echo "[WARN] curl failed to download $BASE_URL/$SCRIPT" >&2
+  fi
+fi
+if [ "$downloaded" -eq 0 ] && command -v wget >/dev/null 2>&1; then
+  if wget -q --tries=5 --waitretry=5 --timeout=60 -O "$SCRIPT" "$BASE_URL/$SCRIPT"; then
+    downloaded=1
+  else
+    echo "[WARN] wget failed to download $BASE_URL/$SCRIPT" >&2
+  fi
+fi
+if [ "$downloaded" -eq 0 ]; then
+  echo "[ERROR] Failed to download $BASE_URL/$SCRIPT via curl or wget" >&2
+  exit 1
 fi
 exec bash "$SCRIPT"

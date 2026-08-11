@@ -19,6 +19,10 @@ KASM_UPSTREAM_AUTH_ADDRESS="${{KASM_UPSTREAM_AUTH_ADDRESS:-{upstream_auth_addres
 KASM_CHECKIN_JWT="${{KASM_CHECKIN_JWT:-{checkin_jwt}}}"
 KASM_CONNECTION_USERNAME="${{KASM_CONNECTION_USERNAME:-{connection_username}}}"
 KASM_CONNECTION_PASSWORD="${{KASM_CONNECTION_PASSWORD:-{connection_password}}}"
+# The computer object name Kasm created for this server. Not set on every hypervisor
+# (e.g. Proxmox, VMware may not run CloudBase-Init-equivalent provisioning), so it can
+# be empty, matches Windows' -ServerName / {server_hostname} behavior exactly.
+KASM_SERVER_HOSTNAME="${{KASM_SERVER_HOSTNAME:-{server_hostname}}}"
 
 # AD join (only used when ENABLE_AD_JOIN=1)
 AD_DOMAIN="${{KASM_DOMAIN:-{domain}}}"
@@ -35,6 +39,137 @@ AD_DNS_SERVER="${{KASM_AD_DNS_SERVER:-}}"   # e.g. export KASM_AD_DNS_SERVER="19
 # *.oraclevcn.com) cause CONSTRAINT_ATT_TYPE on servicePrincipalName during join.
 SET_DOMAIN_FQDN="${{KASM_SET_DOMAIN_FQDN:-1}}"
 
+# Logging: DEBUG < INFO < WARNING < ERROR < CRITICAL. KASM_LOG_LEVEL sets the minimum
+# level that is written to the local log and forwarded to Kasm Workspaces.
+LOG_LEVEL="${{KASM_LOG_LEVEL:-INFO}}"
+LOG_LEVEL="$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')"
+
+# TLS certificate verification for the log-forwarding request. Off by default, matching
+# Windows' -VerifyKasmApiCert switch (also off unless explicitly passed).
+VERIFY_API_CERT="${{KASM_VERIFY_API_CERT:-0}}"
+
+_log_level_num() {{
+  case "$1" in
+    DEBUG)         echo 0 ;;
+    INFO)          echo 1 ;;
+    WARNING)       echo 2 ;;
+    ERROR)         echo 3 ;;
+    CRITICAL)      echo 4 ;;
+    *)             echo 1 ;;
+  esac
+}}
+
+_json_escape() {{
+  local s="$1"
+  s="${{s//\\/\\\\}}"
+  s="${{s//\"/\\\"}}"
+  s="${{s//$'\n'/\\n}}"
+  s="${{s//$'\r'/\\r}}"
+  s="${{s//$'\t'/\\t}}"
+  printf '%s' "$s"
+}}
+
+# Forward one log line to Kasm Workspaces (POST /api/component_log). Fire-and-forget:
+# runs in the background so a slow/unreachable API never delays the install. Falls
+# back to /api/kasm_session_log once on a 404, for Kasm 1.17 and earlier, that
+# endpoint's exact request schema is unconfirmed, so this reuses the component_log
+# payload shape as a best-effort fallback.
+# POST $2 to $1 via curl if available, else wget (bootstrap.sh only guarantees one
+# of the two is installed before rpm.sh's own "dnf install -y wget curl" runs).
+# Echoes the resulting HTTP status code so send_kasm_log's retry/fallback loop
+# behaves the same regardless of which downloader is present.
+_http_post_status() {{
+  local url="$1" body="$2" cert_opt="$3"
+  if command -v curl >/dev/null 2>&1; then
+    curl $cert_opt -sS -o /dev/null -w '%{{http_code}}' --max-time 10 \
+      -X POST -H "Content-Type: application/json" -d "$body" "$url" 2>/dev/null
+    return
+  fi
+  local wget_cert_opt=""
+  [ "$cert_opt" = "-k" ] && wget_cert_opt="--no-check-certificate"
+  wget $wget_cert_opt -q -O /dev/null --server-response --timeout=10 \
+    --header="Content-Type: application/json" --post-data="$body" "$url" 2>&1 \
+    | grep -oE 'HTTP/[0-9.]+ [0-9]+' | tail -1 | cut -d' ' -f2
+}}
+
+send_kasm_log() {{
+  local level="$1" message="$2"
+  command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || return 0
+  [ -n "${{KASM_CHECKIN_JWT:-}}" ] && [ -n "${{KASM_UPSTREAM_AUTH_ADDRESS:-}}" ] || return 0
+
+  local host msg_json body cert_opt
+  if [ -n "$KASM_SERVER_HOSTNAME" ]; then
+    host="$KASM_SERVER_HOSTNAME"
+  else
+    host=$(hostname 2>/dev/null || echo unknown)
+  fi
+  if [ "$VERIFY_API_CERT" -eq 1 ]; then
+    cert_opt=""
+  else
+    cert_opt="-k"
+  fi
+  local token_json host_json level_json ingest_json
+  token_json=$(_json_escape "$KASM_CHECKIN_JWT")
+  host_json=$(_json_escape "$host")
+  level_json=$(_json_escape "$level")
+  msg_json=$(_json_escape "$message")
+  ingest_json=$(_json_escape "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+  body=$(printf '{{"token":"%s","logs":[{{"host":"%s","application":"startup-script","levelname":"%s","message":"%s","ingest_date":"%s"}}]}}' \
+    "$token_json" "$host_json" "$level_json" "$msg_json" "$ingest_json")
+
+  (
+    set +e
+    url="https://$KASM_UPSTREAM_AUTH_ADDRESS/api/component_log"
+    fell_back=0
+    attempt=1
+    while [ "$attempt" -le 3 ]; do
+      code=$(_http_post_status "$url" "$body" "$cert_opt")
+
+      case "$code" in
+        2??)
+          exit 0
+          ;;
+        404)
+          if [ "$fell_back" -eq 0 ]; then
+            url="https://$KASM_UPSTREAM_AUTH_ADDRESS/api/kasm_session_log"
+            fell_back=1
+            continue
+          fi
+          ;;
+      esac
+
+      attempt=$((attempt + 1))
+      if [ "$attempt" -le 3 ]; then
+        sleep 2
+      else
+        printf '%s\tFailed to send log to Kasm Workspaces: HTTP %s\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${{code:-unknown}}" >>"$LOG_FILE" 2>/dev/null
+      fi
+    done
+  ) &
+}}
+
+# Write a level-tagged, timestamped line locally and forward it to Kasm Workspaces.
+# Messages below $LOG_LEVEL are dropped entirely (not written, not forwarded).
+log() {{
+  local level="$1"; shift
+  local message="$*"
+  local levelnum threshnum ts
+
+  levelnum=$(_log_level_num "$level")
+  threshnum=$(_log_level_num "$LOG_LEVEL")
+  [ "$levelnum" -ge "$threshnum" ] || return 0
+
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if [ "$level" = "WARNING" ] || [ "$level" = "ERROR" ] || [ "$level" = "CRITICAL" ]; then
+    printf '%s [%s] %s\n' "$ts" "$level" "$message" >&2
+  else
+    printf '%s [%s] %s\n' "$ts" "$level" "$message"
+  fi
+
+  send_kasm_log "$level" "$message"
+}}
+
 LOG_FILE="/var/log/kasm_install.log"
 mkdir -p /var/log
 touch "$LOG_FILE"
@@ -42,11 +177,11 @@ chmod 0600 "$LOG_FILE"
 echo "===== KASM RPM INSTALL STARTED $(date) =====" >> "$LOG_FILE"
 exec > >(stdbuf -oL -eL tee -a "$LOG_FILE") 2>&1
 
-# Flags must be 0 or 1 — anything else (e.g. a typo'd override) fails fast here.
+# Flags must be 0 or 1, anything else (e.g. a typo'd override) fails fast here.
 validate_flag() {{
   case "$2" in
     0|1) ;;
-    *) echo "[ERROR] $1 must be 0 or 1 (got: '$2')" >&2; exit 1 ;;
+    *) log ERROR "$1 must be 0 or 1 (got: '$2')"; exit 1 ;;
   esac
 }}
 validate_flag KASM_ENABLE_KASMVNC "$ENABLE_KASMVNC"
@@ -56,12 +191,13 @@ validate_flag KASM_ENABLE_EPEL "$ENABLE_EPEL"
 validate_flag KASM_ENABLE_IPTABLES "$ENABLE_IPTABLES"
 validate_flag KASM_ENABLE_AD_JOIN "$ENABLE_AD_JOIN"
 validate_flag KASM_SET_DOMAIN_FQDN "$SET_DOMAIN_FQDN"
+validate_flag KASM_VERIFY_API_CERT "$VERIFY_API_CERT"
 
-# Detect OS — used by install_epel and install_kasmvnc
+# Detect OS, used by install_epel and install_kasmvnc
 . /etc/os-release
 OS_ID="$ID"
 OS_MAJOR=$(echo "${{VERSION_ID:-}}" | cut -d'.' -f1)
-echo "[INFO] Detected OS: $OS_ID $OS_MAJOR"
+log INFO "Detected OS: $OS_ID $OS_MAJOR"
 
 # Wait for the package-manager lock (held during boot-time auto-patching) and
 # retry transient download failures.
@@ -70,7 +206,7 @@ dnf() {{
 }}
 
 configure_iptables() {{
-  echo "[INFO] Adding firewall rules at $(date)"
+  log INFO "Adding firewall rules"
 
   if systemctl is-active --quiet firewalld; then
     # firewall-cmd hangs on D-Bus early in boot on Oracle Linux, so we avoid it and
@@ -87,7 +223,7 @@ configure_iptables() {{
     if [ "$ENABLE_KDS"     -eq 1 ]; then firewall-offline-cmd --add-port=4902/tcp || true; fi
     if [ "$ENABLE_KASMVNC" -eq 1 ]; then firewall-offline-cmd --add-port=5902/tcp || true; fi
 
-    systemctl start firewalld || {{ echo "[ERROR] firewalld failed to start; host firewall not active" >&2; exit 1; }}
+    systemctl start firewalld || {{ log ERROR "firewalld failed to start; host firewall not active"; exit 1; }}
   else
     dnf install -y iptables-services
     systemctl enable iptables
@@ -102,7 +238,7 @@ configure_iptables() {{
 }}
 
 install_epel() {{
-  echo "[INFO] Installing EPEL for $OS_ID $OS_MAJOR"
+  log INFO "Installing EPEL for $OS_ID $OS_MAJOR"
   # dnf config-manager requires dnf-plugins-core; absent on minimal installs
   dnf install -y dnf-plugins-core
   case "$OS_ID" in
@@ -113,17 +249,17 @@ install_epel() {{
     rhel)
       dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${{OS_MAJOR}}.noarch.rpm"
       # CodeReady Linux Builder is required for some EPEL package dependencies on RHEL.
-      # The repo name differs between bare-metal RHEL, RHUI cloud images, and RHEL 9's 'crb' alias —
+      # The repo name differs between bare-metal RHEL, RHUI cloud images, and RHEL 9's 'crb' alias -
       # try each until one succeeds. 'powertools' is a CentOS-only fallback.
       ARCH=$(uname -m)
       dnf config-manager --enable "codeready-builder-for-rhel-${{OS_MAJOR}}-${{ARCH}}-rpms" 2>/dev/null \
         || dnf config-manager --enable "codeready-builder-for-rhel-${{OS_MAJOR}}-rhui-rpms" 2>/dev/null \
         || dnf config-manager --enable crb 2>/dev/null \
         || dnf config-manager --enable powertools 2>/dev/null \
-        || echo "[WARN] Could not enable CodeReady Builder / CRB repo — some EPEL deps may not resolve" >&2
+        || log WARNING "Could not enable CodeReady Builder / CRB repo, some EPEL deps may not resolve"
       ;;
     *)
-      echo "[ERROR] EPEL install not supported for OS: $OS_ID" >&2
+      log ERROR "EPEL install not supported for OS: $OS_ID"
       return 1
       ;;
   esac
@@ -132,9 +268,9 @@ install_epel() {{
 install_xfce() {{
   if ! dnf group info "Xfce" &>/dev/null; then
     if [ "$ENABLE_EPEL" -eq 0 ]; then
-      echo "[ERROR] Xfce group is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
+      log ERROR "Xfce group is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first."
     else
-      echo "[ERROR] Xfce group is not available even though EPEL was enabled. install_epel may have partially failed — check the log above for EPEL or CRB errors before retrying." >&2
+      log ERROR "Xfce group is not available even though EPEL was enabled. install_epel may have partially failed, check the log above for EPEL or CRB errors before retrying."
     fi
     return 1
   fi
@@ -152,9 +288,9 @@ install_xfce() {{
 # Optional: screenshot tooling
 install_screenshot_tools() {{
   if dnf install -y gnome-screenshot; then
-    echo "[INFO] gnome-screenshot installed successfully"
+    log INFO "gnome-screenshot installed successfully"
   else
-    echo "[WARN] gnome-screenshot not available; screenshot API may be limited on this system"
+    log WARNING "gnome-screenshot not available; screenshot API may be limited on this system"
   fi
 }}
 
@@ -169,7 +305,7 @@ install_kasmvnc() {{
     ol-9|rhel-9)   KASMVNC_DISTRO="oracle_9" ;;
     ol-8|rhel-8)   KASMVNC_DISTRO="oracle_8" ;;
     *)
-      echo "[ERROR] KasmVNC: unsupported distro $OS_ID $OS_MAJOR" >&2
+      log ERROR "KasmVNC: unsupported distro $OS_ID $OS_MAJOR"
       return 1
       ;;
   esac
@@ -215,9 +351,9 @@ install_xrdp() {{
   # Precheck: verify xrdp is available; if not, EPEL must be enabled and working
   if ! dnf list available xrdp &>/dev/null; then
     if [ "$ENABLE_EPEL" -eq 0 ]; then
-      echo "[ERROR] xrdp is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first." >&2
+      log ERROR "xrdp is not available in configured repos. Set ENABLE_EPEL=1 to install EPEL first."
     else
-      echo "[ERROR] xrdp is not available even though EPEL was enabled. install_epel may have partially failed — check the log above for EPEL or CRB errors before retrying." >&2
+      log ERROR "xrdp is not available even though EPEL was enabled. install_epel may have partially failed, check the log above for EPEL or CRB errors before retrying."
     fi
     return 1
   fi
@@ -288,7 +424,7 @@ install_kds() {{
   case "$ARCH" in
     x86_64)          KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_amd64.rpm" ;;
     aarch64|arm64)   KDS_RPM_URL="https://kasmweb-build-artifacts.s3.amazonaws.com/kasm_desktop_service/kasm-desktop-service_0.0%2Bdevelop_arm64.rpm" ;;
-    *)               echo "[ERROR] Unsupported architecture: $ARCH" >&2; exit 1 ;;
+    *)               log ERROR "Unsupported architecture: $ARCH"; exit 1 ;;
   esac
 
   cd /tmp
@@ -311,7 +447,7 @@ install_kds() {{
     --api-host="$API_HOST" \
     --api-port="$API_PORT" \
     --token="$REG_TOKEN" \
-  || {{ echo "[ERROR] KDS registration failed or timed out against $API_HOST:$API_PORT" >&2; exit 1; }}
+  || {{ log ERROR "KDS registration failed or timed out against $API_HOST:$API_PORT"; exit 1; }}
 
   sleep 2
 
@@ -320,7 +456,7 @@ install_kds() {{
 }}
 
 install_ad_dependencies() {{
-  echo "[INFO] Installing AD dependencies"
+  log INFO "Installing AD dependencies"
   dnf install -y \
     realmd sssd sssd-tools adcli \
     oddjob oddjob-mkhomedir \
@@ -344,11 +480,11 @@ set_domain_fqdn() {{
   # cloud-init), leave it alone rather than rewriting and risking breakage.
   case "$current" in
     *".$AD_DOMAIN")
-      echo "[INFO] FQDN already within $AD_DOMAIN ($current) — leaving as-is"
+      log INFO "FQDN already within $AD_DOMAIN ($current), leaving as-is"
       return 0
       ;;
   esac
-  echo "[INFO] Setting FQDN to $fqdn for AD join (was: $current)"
+  log INFO "Setting FQDN to $fqdn for AD join (was: $current)"
   hostnamectl set-hostname "$fqdn"
   # Map the FQDN locally so hostname -f and adcli resolve it even when the forward
   # A record has not propagated yet in AD DNS.
@@ -359,28 +495,28 @@ set_domain_fqdn() {{
 
 configure_dns_for_ad() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    echo "[INFO] AD_DNS_SERVER not set — relying on existing DNS to reach the domain"
+    log INFO "AD_DNS_SERVER not set, relying on existing DNS to reach the domain"
     return
   fi
   if command -v nmcli >/dev/null 2>&1; then
-    echo "[INFO] Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
+    log INFO "Configuring DNS for AD via nmcli: $AD_DNS_SERVER"
     local dev nic
     dev=$(ip route show default 2>/dev/null | awk 'NR==1 {{print $5}}')
     if [ -z "$dev" ]; then
-      echo "[ERROR] Could not determine default route interface" >&2
+      log ERROR "Could not determine default route interface"
       exit 1
     fi
     nic=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: -v d="$dev" '$2 == d {{print $1}}' | head -1)
     if [ -z "$nic" ]; then
-      echo "[ERROR] No active NetworkManager connection found for device $dev" >&2
+      log ERROR "No active NetworkManager connection found for device $dev"
       exit 1
     fi
-    echo "[INFO] Updating connection: $nic (device: $dev)"
+    log INFO "Updating connection: $nic (device: $dev)"
     nmcli connection modify "$nic" ipv4.dns "$AD_DNS_SERVER" ipv4.ignore-auto-dns yes
     nmcli connection reload
-    nmcli connection up "$nic" || echo "[WARN] nmcli connection up failed — DNS change may not be active until next reconnect" >&2
+    nmcli connection up "$nic" || log WARNING "nmcli connection up failed, DNS change may not be active until next reconnect"
   else
-    echo "[INFO] nmcli not available — configuring DNS via /etc/resolv.conf"
+    log INFO "nmcli not available, configuring DNS via /etc/resolv.conf"
     local tmp target
     tmp=$(mktemp)
     for server in $AD_DNS_SERVER; do
@@ -389,7 +525,7 @@ configure_dns_for_ad() {{
     grep -v "^nameserver" /etc/resolv.conf >>"$tmp" || true
     if [ -L /etc/resolv.conf ]; then
       target=$(readlink -f /etc/resolv.conf)
-      echo "[INFO] /etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
+      log INFO "/etc/resolv.conf is a symlink -> $target; writing to target to preserve link"
       cp "$tmp" "$target"
       rm -f "$tmp"
     else
@@ -399,7 +535,7 @@ configure_dns_for_ad() {{
 }}
 
 configure_krb5_realm() {{
-  # Write a minimal krb5 default_realm ONLY when none is configured anywhere — active in
+  # Write a minimal krb5 default_realm ONLY when none is configured anywhere, active in
   # /etc/krb5.conf or any conf.d snippet. RHEL/OL ship it commented out, and adcli can
   # fail with "Configuration file does not specify default realm" when the realm cannot
   # be resolved from the system config. This is idempotent insurance: if the system (or a
@@ -408,31 +544,31 @@ configure_krb5_realm() {{
   local existing
   existing=$(grep -hE '^[[:space:]]*default_realm[[:space:]]*=' /etc/krb5.conf /etc/krb5.conf.d/*.conf 2>/dev/null | head -1 || true)
   if [ -n "$existing" ]; then
-    echo "[INFO] krb5 default_realm already configured ($existing) — leaving as-is"
+    log INFO "krb5 default_realm already configured ($existing), leaving as-is"
     return 0
   fi
   local realm
   realm=$(echo "$AD_DOMAIN" | tr '[:lower:]' '[:upper:]')
-  echo "[INFO] No krb5 default_realm found — writing: $realm"
+  log INFO "No krb5 default_realm found, writing: $realm"
   mkdir -p /etc/krb5.conf.d
   printf '[libdefaults]\n    default_realm = %s\n[domain_realm]\n    .%s = %s\n    %s = %s\n' \
     "$realm" "$AD_DOMAIN" "$realm" "$AD_DOMAIN" "$realm" >/etc/krb5.conf.d/kasm-ad.conf
 }}
 
 sync_time() {{
-  echo "[INFO] Syncing system clock (Kerberos requires <5 min skew)"
+  log INFO "Syncing system clock (Kerberos requires <5 min skew)"
   systemctl enable --now chronyd
   # Wait up to ~30s for chrony to contact a source before stepping. Without this,
   # makestep can fire before any NTP sample is in and realm join later fails with
   # an opaque Kerberos clock-skew error.
-  chronyc waitsync 6 0 0 5 || echo "[WARN] chrony did not reach a source within 30s" >&2
+  chronyc waitsync 6 0 0 5 || log WARNING "chrony did not reach a source within 30s"
   if ! chronyc makestep; then
-    echo "[WARN] chronyc makestep failed — verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join" >&2
+    log WARNING "chronyc makestep failed, verify NTP port 123/UDP is reachable and clock skew is under 5 minutes before realm join"
   fi
 }}
 
 test_domain_resolution() {{
-  echo "[INFO] Testing DNS resolution for $AD_DOMAIN"
+  log INFO "Testing DNS resolution for $AD_DOMAIN"
   # Pin dig to AD_DNS_SERVER when provided so the test bypasses any stale system
   # resolver state from before configure_dns_for_ad ran. Use only the first server.
   local dig_server=""
@@ -441,31 +577,31 @@ test_domain_resolution() {{
   fi
   local srv_query="_ldap._tcp.$AD_DOMAIN"
   if ! dig +short +time=5 +tries=2 $dig_server "$srv_query" SRV | grep -q '.'; then
-    echo "[ERROR] LDAP SRV records not found for $AD_DOMAIN via ${{AD_DNS_SERVER:-system resolver}}" >&2
-    echo "[ERROR] timed out => 53 blocked/unreachable; SERVFAIL/REFUSED => wrong server/zone; NXDOMAIN => records missing" >&2
+    log ERROR "LDAP SRV records not found for $AD_DOMAIN via ${{AD_DNS_SERVER:-system resolver}}"
+    log ERROR "timed out => 53 blocked/unreachable; SERVFAIL/REFUSED => wrong server/zone; NXDOMAIN => records missing"
     dig +time=5 +tries=2 $dig_server "$srv_query" SRV 2>&1 | sed 's/^/[dig] /' >&2
     exit 1
   fi
   realm discover "$AD_DOMAIN" >/dev/null || {{
-    echo "[ERROR] realm discovery failed for $AD_DOMAIN" >&2
+    log ERROR "realm discovery failed for $AD_DOMAIN"
     exit 1
   }}
-  echo "[INFO] Domain resolution successful"
+  log INFO "Domain resolution successful"
 }}
 
 join_domain() {{
-  echo "[INFO] Joining domain $AD_DOMAIN via one-time password"
+  log INFO "Joining domain $AD_DOMAIN via one-time password"
   realm join --verbose --one-time-password="$AD_JOIN_PASSWORD" "$AD_DOMAIN" || {{
-    echo "[ERROR] Domain join failed" >&2
+    log ERROR "Domain join failed"
     exit 1
   }}
-  echo "[INFO] Domain join successful"
+  log INFO "Domain join successful"
 }}
 
 enable_homedir_creation() {{
-  echo "[INFO] Configuring sssd and home directory creation"
+  log INFO "Configuring sssd and home directory creation"
   if [ ! -f /etc/sssd/sssd.conf ]; then
-    echo "[ERROR] /etc/sssd/sssd.conf not found — realm join may not have completed successfully" >&2
+    log ERROR "/etc/sssd/sssd.conf not found, realm join may not have completed successfully"
     exit 1
   fi
   if ! grep -q "ad_gpo_map_remote_interactive" /etc/sssd/sssd.conf; then
@@ -480,23 +616,23 @@ enable_homedir_creation() {{
 }}
 
 kasm_checkin() {{
-  echo "[INFO] Signaling Kasm server ready"
+  log INFO "Signaling Kasm server ready"
   if curl -k -fsS -X POST \
       -H "Content-Type: application/json" \
       --data '{{"status":"running","status_message":"Startup complete","status_progress":"100"}}' \
       "https://$KASM_UPSTREAM_AUTH_ADDRESS/api/set_server_status?token=$KASM_CHECKIN_JWT"; then
-    echo "[INFO] Kasm check-in successful"
+    log INFO "Kasm check-in successful"
   else
-    echo "[ERROR] Kasm check-in failed — server may not be marked ready in Kasm UI" >&2
+    log ERROR "Kasm check-in failed, server may not be marked ready in Kasm UI"
   fi
 }}
 
 install_ad_join() {{
   if [ -z "$AD_DNS_SERVER" ]; then
-    echo "[INFO] AD_DNS_SERVER not set — relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN" >&2
+    log INFO "AD_DNS_SERVER not set, relying on preconfigured DNS (VNET/DHCP) to resolve $AD_DOMAIN"
   fi
   if realm list 2>/dev/null | grep -Fiq "domain-name: $AD_DOMAIN"; then
-    echo "[INFO] Already joined to $AD_DOMAIN, skipping"
+    log INFO "Already joined to $AD_DOMAIN, skipping"
     return
   fi
   install_ad_dependencies
@@ -507,7 +643,7 @@ install_ad_join() {{
   test_domain_resolution
   join_domain
   enable_homedir_creation
-  echo "[INFO] AD join complete"
+  log INFO "AD join complete"
 }}
 
 sleep 5
